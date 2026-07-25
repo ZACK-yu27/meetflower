@@ -11,7 +11,7 @@ from pathlib import Path
 
 from PIL import Image, ImageChops, ImageDraw
 
-from . import catalog
+from . import catalog, settings
 
 # 生成图落盘目录：server/app/assets/gen（与 cwd 无关，按本文件位置推导）
 GEN_DIR = Path(__file__).resolve().parent.parent / "assets" / "gen"
@@ -311,11 +311,11 @@ def _stage_image(species: str, color: str, stage: str) -> Image.Image:
 # ---------- 对外接口（API.md §4） ----------
 
 def stage_image_url(species: str, main_color: str, stage: str) -> str:
-    return f"{URL_PREFIX}/{catalog.file_stem(species, main_color)}_{stage}.png"
+    return settings.public_url(f"{URL_PREFIX}/{catalog.file_stem(species, main_color)}_{stage}.png")
 
 
 def flower_image_url(species: str, main_color: str) -> str:
-    return f"{URL_PREFIX}/{catalog.file_stem(species, main_color)}_flower.png"
+    return settings.public_url(f"{URL_PREFIX}/{catalog.file_stem(species, main_color)}_flower.png")
 
 
 def ensure_stage_images(species: str, main_color: str) -> dict[str, str]:
@@ -326,7 +326,7 @@ def ensure_stage_images(species: str, main_color: str) -> dict[str, str]:
         path = GEN_DIR / f"{stem}_{stage}.png"
         if not path.exists():
             _stage_image(species, main_color, stage).save(path)
-        urls[stage] = f"{URL_PREFIX}/{path.name}"
+        urls[stage] = settings.public_url(f"{URL_PREFIX}/{path.name}")
     flower_path = GEN_DIR / f"{stem}_flower.png"
     if not flower_path.exists():
         render_flower_head(IMG_SIZE, species, main_color).save(flower_path)

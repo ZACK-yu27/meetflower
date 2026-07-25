@@ -105,6 +105,9 @@ git push origin main
 | `ARK_BASE_URL` | `https://ark.cn-beijing.volces.com/api/v3` | |
 | `ARK_CHAT_MODEL` | `doubao-seed-2-1-turbo-260628` | |
 | `ARK_IMAGE_MODEL` | `doubao-seedream-5-0-pro-260628` | |
+| `PUBLIC_BASE_URL` | `https://<你的 Render 实际域名>` | 静态资源 URL 前缀，**必填**，见下方说明 |
+
+> **⚠️ Render 域名说明**：`onrender.com` 子域名全局唯一。若 `flowers-api` 已被他人占用，Render 会分配带随机后缀的域名（如 `flowers-api-ab12.onrender.com`）。**以 Render Dashboard 服务页顶部显示的实际 URL 为准**，把它同时填到 `PUBLIC_BASE_URL` 和前端 `VITE_API_BASE_URL`。`PUBLIC_BASE_URL` 缺失时，生成图/上传图的 URL 是相对路径，会被浏览器解析到前端域名（Pages）下而 404。
 
 7. 点击 **Apply**
 8. 等待构建完成（约 2-3 分钟）
@@ -286,6 +289,17 @@ Render Free 没有持久化卷，每次 git push 部署后容器重建，SQLite 
 2. 在 Cloudflare Dashboard → DNS 页面，确认有 A/AAAA 记录或 CNAME 记录
 3. 使用 `dig meetflower.org` 或在线 DNS 检测工具确认解析已生效
 4. 清除浏览器缓存或尝试无痕模式
+
+### Q6: API 全部 404，响应是 `Cannot GET /api/v1/...`？
+
+`Cannot GET` 是 **Express（Node.js）** 的错误格式，不是本项目 FastAPI 的——说明 `VITE_API_BASE_URL` 指向了**别人的 Render 服务**（`onrender.com` 子域名全局唯一，`flowers-api` 这类通用名很可能已被占用）。
+
+**解决方案**：
+
+1. 打开 Render Dashboard 你的服务页面，复制顶部显示的**实际 URL**（可能带随机后缀，如 `flowers-api-ab12.onrender.com`）
+2. 直接访问 `<实际URL>/api/v1/gardens/1`，应返回 JSON（含 `resources`/`plants`）；返回 JSON 格式的 `{"detail": ...}` 错误才是本项目的响应
+3. Cloudflare Pages → Settings → Environment variables：把 `VITE_API_BASE_URL` 改为实际 URL，重新部署前端
+4. Render → Environment：把 `PUBLIC_BASE_URL` 也设为同一个实际 URL（静态资源前缀），重新部署后端
 
 ---
 

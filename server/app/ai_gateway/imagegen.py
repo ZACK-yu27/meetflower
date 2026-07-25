@@ -98,7 +98,7 @@ def _generate_ark(items: list[BouquetItem], out_stem: str) -> str:
     # Seedream 返回格式随参数（jpeg/png），按魔数定扩展名
     ext = ".png" if data.startswith(b"\x89PNG") else ".jpg"
     (GEN_DIR / f"{out_stem}{ext}").write_bytes(data)
-    return f"{URL_PREFIX}/{out_stem}{ext}"
+    return settings.public_url(f"{URL_PREFIX}/{out_stem}{ext}")
 
 
 # ---------- 本地 Pillow 合成（mock） ----------
@@ -154,4 +154,4 @@ def _generate_mock(items: list[BouquetItem], out_stem: str) -> str:
 
     out_path = GEN_DIR / f"{out_stem}.png"
     img.convert("RGB").save(out_path)
-    return f"{URL_PREFIX}/{out_stem}.png"
+    return settings.public_url(f"{URL_PREFIX}/{out_stem}.png")

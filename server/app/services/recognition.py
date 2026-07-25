@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from .. import config
 from ..ai_gateway import ensure_stage_images, flower_image_url, flower_profile, identify_flower
 from ..ai_gateway import settings as ai_settings
+from ..ai_gateway.settings import public_url
 from ..db import SessionLocal
 from ..models import Recognition
 from ..schemas import RecognitionOut
@@ -32,13 +33,13 @@ def save_upload(data: bytes, suffix: str) -> tuple[Path, str]:
     path = config.UPLOADS_DIR / name
     if not path.exists():
         path.write_bytes(data)
-    return path, f"/static/uploads/{name}"
+    return path, public_url(f"/static/uploads/{name}")
 
 
 def _out(recognition: Recognition) -> RecognitionOut:
     return RecognitionOut(
         recognition_id=recognition.id,
-        image_url=f"/static/uploads/{Path(recognition.image_path).name}",
+        image_url=public_url(f"/static/uploads/{Path(recognition.image_path).name}"),
         species=recognition.species,
         main_color=recognition.main_color,
         secondary_color=recognition.secondary_color,

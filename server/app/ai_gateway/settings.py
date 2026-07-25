@@ -34,3 +34,13 @@ ARK_IMAGE_TIMEOUT = float(os.environ.get("ARK_IMAGE_TIMEOUT", "120"))
 
 # ark = 真实模型（每次调用失败自动降级 mock）；mock = 全部本地 mock（测试/离线）
 AI_PROVIDER = os.environ.get("AI_PROVIDER") or ("ark" if ARK_API_KEY else "mock")
+
+# 静态资源公网前缀：本地开发为空（/static/... 相对路径，走 vite 代理）；
+# 生产部署（前端与 API 不同域，如 Pages + Render）时设为后端公网地址，
+# 例如 https://flowers-api-xxxx.onrender.com —— 否则前端会把图片 URL 解析到前端域名下 404
+PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "").rstrip("/")
+
+
+def public_url(path: str) -> str:
+    """把 /static/... 相对路径转为可跨域访问的 URL（未配置 PUBLIC_BASE_URL 时原样返回）。"""
+    return f"{PUBLIC_BASE_URL}{path}" if PUBLIC_BASE_URL else path
