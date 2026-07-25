@@ -83,4 +83,7 @@ ASSETS_DIR = Path(__file__).resolve().parent / "assets"
 UPLOADS_DIR = ASSETS_DIR / "uploads"
 GEN_DIR = ASSETS_DIR / "gen"
 for _d in (ASSETS_DIR, UPLOADS_DIR, GEN_DIR):
-    _d.mkdir(parents=True, exist_ok=True)
+    try:
+        _d.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        pass  # Render 等只读环境可能无法创建，已存在时忽略
