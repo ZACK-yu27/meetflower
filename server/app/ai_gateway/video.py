@@ -11,8 +11,8 @@ from pathlib import Path
 import imageio_ffmpeg
 
 FRAME_INTERVAL_SECONDS = 3
-MAX_FRAMES = 8
-FRAME_WIDTH = 512
+MAX_FRAMES = 6        # 帧数是 VLM 延时主因，6 帧覆盖 18 秒足够判断主体
+FRAME_WIDTH = 384     # 384px + detail=low：控制 payload 与模型延时（曾致前端超时）
 
 
 class VideoFrameError(Exception):
@@ -29,7 +29,7 @@ def extract_frames(video_path: str) -> tuple[list[Path], bytes]:
         "-i", video_path,
         "-vf", f"fps=1/{FRAME_INTERVAL_SECONDS},scale={FRAME_WIDTH}:-2",
         "-frames:v", str(MAX_FRAMES),
-        "-q:v", "4",
+        "-q:v", "5",
         "-y",
         out_pattern,
     ]

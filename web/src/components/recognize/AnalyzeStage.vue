@@ -54,17 +54,16 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import SkeletonLines from '../SkeletonLines.vue'
 
-defineProps({
-  previewUrl: { type: String, required: true },
-  isVideo: { type: Boolean, default: false }
-})
-
 defineEmits(['cancel'])
 
 // 流程状态：scan（扫描）→ frame（框选）→ card（卡片上滑）
 const stage = ref('scan')
-// 分阶段进度文案：真实模型识别约 10–30s，随等待时长轮换提示
-const hint = ref('正在识别花朵品种…')
+// 分阶段进度文案：真实模型识别约 10–30s（视频链路含抽帧+两段式，可能更久），随等待时长轮换提示
+const props = defineProps({
+  previewUrl: { type: String, required: true },
+  isVideo: { type: Boolean, default: false }
+})
+const hint = ref(props.isVideo ? '正在逐帧分析视频主体…' : '正在识别花朵品种…')
 let timers = []
 
 // 随机扫描光点（直径 6–10px、白色 60–80% 不透明）
@@ -82,8 +81,9 @@ onMounted(() => {
   // 约 0.8s 后进入框选；框选约 600ms 后卡片上滑
   timers.push(setTimeout(() => (stage.value = 'frame'), 800))
   timers.push(setTimeout(() => (stage.value = 'card'), 1400))
-  timers.push(setTimeout(() => (hint.value = '正在撰写专属科普…'), 8000))
-  timers.push(setTimeout(() => (hint.value = '模型有点忙，马上就好…'), 20000))
+  timers.push(setTimeout(() => (hint.value = props.isVideo ? '正在匹配最相似的花卉…' : '正在撰写专属科普…'), 8000))
+  timers.push(setTimeout(() => (hint.value = props.isVideo ? '视频分析较耗时，请耐心等待…' : '模型有点忙，马上就好…'), 20000))
+  timers.push(setTimeout(() => (hint.value = '首次使用可能较慢，马上就好…'), 45000))
 })
 
 onUnmounted(() => {

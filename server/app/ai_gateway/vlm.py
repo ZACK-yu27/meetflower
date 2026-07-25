@@ -147,6 +147,20 @@ _MATCH_SYSTEM = (
 )
 
 
+def _extract_attrs(frames: list) -> dict:
+    """第一段调用：多帧 → {subject, shape, color, texture}（未做非空校验，由调用方负责）。"""
+    content: list[dict] = [{"type": "text", "text": "这是同一视频按时间顺序抽出的帧，分析视频主体。"}]
+    for frame in frames:
+        b64 = base64.b64encode(frame.read_bytes()).decode()
+        content.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}", "detail": "low"}})
+    attrs = ark.chat_json(
+        [{"role": "system", "content": _ATTR_SYSTEM}, {"role": "user", "content": content}],
+        max_tokens=256,
+        model=settings.ARK_VLM_MODEL,
+    )
+    return {k: str(attrs.get(k, "")).strip() for k in RESEMBLE_ATTR_KEYS}
+
+
 def identify_resemble(video_path: str) -> tuple[VlmResult, dict, bytes | None]:
     """广义的花识别：返回 (VlmResult, 属性dict, 封面JPEG字节|None)。
 
@@ -166,17 +180,13 @@ def identify_resemble(video_path: str) -> tuple[VlmResult, dict, bytes | None]:
 def _resemble_ark(video_path: str) -> tuple[VlmResult, dict, bytes]:
     frames, poster = video.extract_frames(video_path)
 
-    # 第一段：VLM 抽取主体属性（多帧，detail=low 与拍照识别同策略）
-    content: list[dict] = [{"type": "text", "text": "这是同一视频按时间顺序抽出的帧，分析视频主体。"}]
-    for frame in frames:
-        b64 = base64.b64encode(frame.read_bytes()).decode()
-        content.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}", "detail": "low"}})
-    attrs = ark.chat_json(
-        [{"role": "system", "content": _ATTR_SYSTEM}, {"role": "user", "content": content}],
-        max_tokens=256,
-        model=settings.ARK_VLM_MODEL,
-    )
-    attrs = {k: str(attrs.get(k, "")).strip() for k in RESEMBLE_ATTR_KEYS}
+    # 第一段：VLM 抽取主体属性（多帧，detail=low 与拍照识别同策略）。
+    # 全帧超时/失败时用前 3 帧重试一次（帧数是 VLM 延时主因），再失败才降级 mock。
+    try:
+        attrs = _extract_attrs(frames)
+    except ark.ArkError:
+        logger.info("VLM 属性抽取失败，减帧重试（%d → 3 帧）", len(frames))
+        attrs = _extract_attrs(frames[:3])
     if any(not v for v in attrs.values()):
         raise ark.ArkError(f"属性抽取不完整: {attrs}")
 
