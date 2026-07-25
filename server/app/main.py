@@ -15,8 +15,6 @@ from .api import badge, bouquets, demo, gardens, house, orders, recognitions
 from .services import DomainError
 from .services.garden import seed_db
 
-Base.metadata.create_all(engine)
-
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
