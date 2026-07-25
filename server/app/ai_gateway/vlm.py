@@ -155,7 +155,7 @@ def _extract_attrs(frames: list) -> dict:
         content.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}", "detail": "low"}})
     attrs = ark.chat_json(
         [{"role": "system", "content": _ATTR_SYSTEM}, {"role": "user", "content": content}],
-        max_tokens=256,
+        max_tokens=128,  # 属性 JSON 很短，限制输出长度降低延时
         model=settings.ARK_VLM_MODEL,
     )
     return {k: str(attrs.get(k, "")).strip() for k in RESEMBLE_ATTR_KEYS}

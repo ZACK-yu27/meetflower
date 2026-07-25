@@ -11,8 +11,8 @@ from pathlib import Path
 import imageio_ffmpeg
 
 FRAME_INTERVAL_SECONDS = 3
-MAX_FRAMES = 6        # 帧数是 VLM 延时主因，6 帧覆盖 18 秒足够判断主体
-FRAME_WIDTH = 384     # 384px + detail=low：控制 payload 与模型延时（曾致前端超时）
+MAX_FRAMES = 4        # 帧数是 VLM 延时主因，4 帧覆盖 12 秒足够判断主体（超时治理后再次瘦身）
+FRAME_WIDTH = 320     # 320px + detail=low：控制 payload 与模型延时
 
 
 class VideoFrameError(Exception):

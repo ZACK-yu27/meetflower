@@ -13,6 +13,7 @@ import tempfile
 from pathlib import Path
 
 from fastapi import BackgroundTasks
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .. import config
@@ -155,13 +156,23 @@ def create_resemble_recognition(
     """视频 → 两段式识别（属性抽取→花卉匹配）→ 与拍照识别同一 Recognition 落库。
 
     封面图：ark 路径首帧入库（image_id）；mock 无封面（image_url 空串，前端用本地视频预览）。
+    查重：同一花园上传过同字节视频（超时重试常见）→ 直接复用上次结果，秒回。
     """
+    digest = hashlib.sha256(data).hexdigest()[:12]
+    existing = session.scalar(
+        select(Recognition).where(
+            Recognition.garden_id == garden_id,
+            Recognition.image_path.like(f"%video_{digest}%"),
+        )
+    )
+    if existing is not None:
+        return _out(existing)
+
     path = save_video_temp(data, suffix)
     vlm, attrs, poster = identify_resemble(path)
 
     image_id: int | None = None
     if poster:
-        digest = hashlib.sha256(data).hexdigest()[:12]
         image_id = save_image(session, f"upload_vposter_{digest}.jpg", poster, "image/jpeg").id
 
     stage_images = ensure_stage_images(vlm.species, vlm.main_color, vlm.form)

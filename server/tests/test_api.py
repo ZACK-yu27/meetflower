@@ -256,12 +256,12 @@ def test_resemble_video_mock(client):
     plant = resp.json()
     assert plant["species"] == rec["species"] and plant["main_color"] == rec["main_color"]
 
-    # 同一视频字节 → 确定性同一品种（mock 哈希）
+    # 同一视频字节 → 查重秒回：直接复用上次识别记录（同一 recognition_id）
     resp2 = client.post(
         "/api/v1/recognitions/video",
         files={"video": ("clip.mp4", video_bytes, "video/mp4")},
     )
-    assert resp2.json()["species"] == rec["species"]
+    assert resp2.json()["recognition_id"] == rec["recognition_id"]
 
 
 def test_resemble_video_rejects_bad_input(client):
