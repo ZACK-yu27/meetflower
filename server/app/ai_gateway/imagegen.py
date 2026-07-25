@@ -82,7 +82,7 @@ def generate_bouquet(items: list[BouquetItem], out_stem: str) -> str:
     return _generate_mock(items, out_stem)
 
 
-# ---------- 真实生图（火山方舟 doubao-seedream-5-0-pro） ----------
+# ---------- 真实生图（火山方舟 doubao-seedream-5-0） ----------
 
 def _build_prompt(items: list[BouquetItem]) -> str:
     flowers = "、".join(f"{it.count} 朵{it.color}色{it.species}" for it in items)
@@ -94,7 +94,7 @@ def _build_prompt(items: list[BouquetItem]) -> str:
 
 
 def _generate_ark(items: list[BouquetItem], out_stem: str) -> str:
-    data = ark.image_b64(_build_prompt(items), size="1K")
+    data = ark.image_b64(_build_prompt(items), size="2K")
     # Seedream 返回格式随参数（jpeg/png），按魔数定扩展名
     ext = ".png" if data.startswith(b"\x89PNG") else ".jpg"
     (GEN_DIR / f"{out_stem}{ext}").write_bytes(data)

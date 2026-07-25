@@ -34,7 +34,7 @@ def identify_flower(image_path: str) -> VlmResult:
     return _identify_mock(image_path)
 
 
-# ---------- 真实 VLM（火山方舟 doubao-seed-2-1-turbo） ----------
+# ---------- 真实 VLM（火山方舟 doubao-seed-2-0-lite） ----------
 
 _SYSTEM = (
     "你是花卉识别专家。识别用户图片中的花朵：species 为中文通用品种名（如绣球、洋桔梗、向日葵，"

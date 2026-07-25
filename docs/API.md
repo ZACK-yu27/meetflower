@@ -228,10 +228,10 @@ ai_gateway 对外契约全部不变，内部按 `AI_PROVIDER` 双实现分发（
 | `flower_profile` | chat/completions 纯文本科普（2 句）；生长节律恒取 catalog；识花链路 ark 模式下经 BackgroundTasks 异步回写 | 图鉴模板（图鉴外品种用通用模板） |
 | `recommend_bouquet` | chat/completions JSON 模式，items 校验必须 ⊆ 库存且不超量，bonus 品种非空即可 | 意图映射规则 |
 | `arrangement_note` / `packaging_suggestion` | chat/completions 一句话 | 模板 |
-| `generate_bouquet` | images/generations（Seedream，size=1K、b64_json、无水印），按魔数存 .png/.jpg | Pillow 合成 |
+| `generate_bouquet` | images/generations（Seedream，size=2K、b64_json、无水印），按魔数存 .png/.jpg | Pillow 合成 |
 | `ensure_stage_images` 等 art.py | — | 恒为 Pillow（阶段资产需确定性 + 透明底，不走生图） |
 
-- 配置（`ai_gateway/settings.py`，独立加载避免与 app.config 循环导入）：`AI_PROVIDER=ark|mock`（未配置 `ARK_API_KEY` 自动 mock）、`ARK_BASE_URL`、`ARK_CHAT_MODEL=doubao-seed-2-1-turbo-260628`、`ARK_VLM_MODEL`（识花专用，缺省同 chat；开通 lite 后可指向更快端点）、`ARK_IMAGE_MODEL=doubao-seedream-5-0-pro-260628`、`ARK_CHAT_TIMEOUT=90`、`ARK_IMAGE_TIMEOUT=120`；chat 调用固定 `reasoning_effort=low` 控制时延。时延优化（2026-07-25 二轮）：VLM 图片 `detail=low`（实测 45.6s→27.3s）、科普文案 2–4 句→2 句且 max_tokens 300→200、识花首响与科普解耦（首响≈VLM 耗时，科普后台补齐约 18s；方舟侧 VLM 实测波动 10–55s）。lite 模型（doubao-seed-2-0-lite 系列）当前账号未开通（ModelNotOpen），开通后设 `ARK_VLM_MODEL` 即可切换。时延优化（2026-07-25 三轮，花束链路）：搭配说明/包装建议 ThreadPoolExecutor 并行（无依赖）、预览首响与生图解耦（首响≈并行文案约 26s，预览图后台生成；Seedream 实测 45–120s 波动，超时自动降级 Pillow 保底出图）。生图降档实测：账号仅开通 seedream-5-0-pro（4.5/4.0/3.0 均 ModelNotOpen），且已用最小 size=1K（文档下限总像素 921600），开通更快生图模型后设 `ARK_IMAGE_MODEL` 即可切换。
+- 配置（`ai_gateway/settings.py`，独立加载避免与 app.config 循环导入）：`AI_PROVIDER=ark|mock`（未配置 `ARK_API_KEY` 自动 mock）、`ARK_BASE_URL`、`ARK_CHAT_MODEL=doubao-seed-2-0-lite-260215`、`ARK_VLM_MODEL`（识花专用，缺省同 chat）、`ARK_IMAGE_MODEL=doubao-seedream-5-0-260128`、`ARK_CHAT_TIMEOUT=90`、`ARK_IMAGE_TIMEOUT=120`；chat 调用固定 `reasoning_effort=low` 控制时延。时延优化（2026-07-25 二轮）：VLM 图片 `detail=low`、科普文案 2 句且 max_tokens=200、识花首响与科普解耦（首响≈VLM 耗时，科普后台异步补齐）。时延优化（2026-07-25 三轮，花束链路）：搭配说明/包装建议 ThreadPoolExecutor 并行、预览首响与生图解耦（预览图后台生成，超时自动降级 Pillow 保底出图）。生图 size 用 2K（seedream-5-0 最小档位，1K 不被接受；实测约 25s）。
 - 密钥经环境变量或 `server/.env`（本地，勿提交；`server/.env.example` 为模板）。
 - pytest 经 `tests/conftest.py` 强制 `AI_PROVIDER=mock`（离线、确定性）；真实链路烟测：`scripts/ark_smoke.py`。
 

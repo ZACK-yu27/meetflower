@@ -103,8 +103,8 @@ git push origin main
 | `AI_PROVIDER` | `mock` → 改 `ark` | 先用 mock 验证部署，确认正常后改为 `ark` |
 | `ARK_API_KEY` | `your-real-api-key` | 火山方舟 API Key（仅在 Dashboard 设置，**勿提交到 git**） |
 | `ARK_BASE_URL` | `https://ark.cn-beijing.volces.com/api/v3` | |
-| `ARK_CHAT_MODEL` | `doubao-seed-2-1-turbo-260628` | |
-| `ARK_IMAGE_MODEL` | `doubao-seedream-5-0-pro-260628` | |
+| `ARK_CHAT_MODEL` | `doubao-seed-2-0-lite-260215` | |
+| `ARK_IMAGE_MODEL` | `doubao-seedream-5-0-260128` | |
 | `PUBLIC_BASE_URL` | `https://<你的 Render 实际域名>` | 静态资源 URL 前缀，**必填**，见下方说明 |
 
 > **⚠️ Render 域名说明**：`onrender.com` 子域名全局唯一。若 `flowers-api` 已被他人占用，Render 会分配带随机后缀的域名（如 `flowers-api-ab12.onrender.com`）。**以 Render Dashboard 服务页顶部显示的实际 URL 为准**，把它同时填到 `PUBLIC_BASE_URL` 和前端 `VITE_API_BASE_URL`。`PUBLIC_BASE_URL` 缺失时，生成图/上传图的 URL 是相对路径，会被浏览器解析到前端域名（Pages）下而 404。

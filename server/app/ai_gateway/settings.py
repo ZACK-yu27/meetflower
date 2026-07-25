@@ -25,10 +25,10 @@ _load_dotenv()
 
 ARK_API_KEY = os.environ.get("ARK_API_KEY", "")
 ARK_BASE_URL = os.environ.get("ARK_BASE_URL", "https://ark.cn-beijing.volces.com/api/v3")
-ARK_CHAT_MODEL = os.environ.get("ARK_CHAT_MODEL", "doubao-seed-2-1-turbo-260628")
-# VLM 识花专用模型（可用更快的端点，如开通 lite 后设 ARK_VLM_MODEL=doubao-seed-2-0-lite-xxx）
+ARK_CHAT_MODEL = os.environ.get("ARK_CHAT_MODEL", "doubao-seed-2-0-lite-260215")
+# VLM 识花专用模型（缺省跟随 chat；如需与科普文案分开可单独设 ARK_VLM_MODEL）
 ARK_VLM_MODEL = os.environ.get("ARK_VLM_MODEL") or ARK_CHAT_MODEL
-ARK_IMAGE_MODEL = os.environ.get("ARK_IMAGE_MODEL", "doubao-seedream-5-0-pro-260628")
+ARK_IMAGE_MODEL = os.environ.get("ARK_IMAGE_MODEL", "doubao-seedream-5-0-260128")
 ARK_CHAT_TIMEOUT = float(os.environ.get("ARK_CHAT_TIMEOUT", "90"))
 ARK_IMAGE_TIMEOUT = float(os.environ.get("ARK_IMAGE_TIMEOUT", "120"))
 

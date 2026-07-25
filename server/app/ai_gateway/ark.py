@@ -100,8 +100,8 @@ def _parse_json(text: str) -> dict:
     raise ArkError(f"无法从响应解析 JSON: {text[:200]}")
 
 
-def image_b64(prompt: str, size: str = "1K") -> bytes:
-    """文生图，返回 PNG/JPEG 字节流。"""
+def image_b64(prompt: str, size: str = "2K") -> bytes:
+    """文生图，返回 PNG/JPEG 字节流。seedream-5-0 最小档位为 2K（1K 不被接受）。"""
     data = _post(
         "/images/generations",
         {
