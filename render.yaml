@@ -15,8 +15,9 @@ services:
       # postgresql://<user>:<password>@<host>.neon.tech/<db>?sslmode=require
       - key: FLOWERS_DATABASE_URL
         sync: false
+      # ark = 真实模型（ARK_API_KEY 在 Dashboard 以 sync:false 配置；缺失时自动降级 mock）
       - key: AI_PROVIDER
-        value: mock
+        value: ark
       - key: ARK_API_KEY
         sync: false
       - key: ARK_BASE_URL
