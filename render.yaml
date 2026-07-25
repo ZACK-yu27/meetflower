@@ -30,5 +30,5 @@ services:
       # 部署后 Render 实际分配的域名（可能带随机后缀，以 Dashboard 为准），如 https://flowers-api-ab12.onrender.com
       - key: PUBLIC_BASE_URL
         sync: false
-    healthCheckPath: /api/v1/gardens/1
+    healthCheckPath: /healthz
     autoDeploy: true

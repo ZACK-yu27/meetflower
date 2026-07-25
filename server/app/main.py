@@ -26,6 +26,12 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="抖音花园 MVP", lifespan=lifespan)
 
+
+@app.get("/healthz")
+def healthz():
+    """Render 健康检查专用：不查库，只证明进程存活（DB 冷启动不应判为服务故障）。"""
+    return {"ok": True}
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
