@@ -1,0 +1,331 @@
+/* 全局样式 · 抖音花园 v2.0 —— 严格按《前端设计规范》§2 tokens 落地
+   设计语言：抖音原生、扁平优先、白底 + 单强调色（抖音红）、内容优先 */
+
+:root {
+  /* ---- §2.1 色彩 ---- */
+  --bg-page: #ffffff; /* 卡片/页面主底 */
+  --bg-dark: #110c17; /* 相机/分析等深色画面层 */
+  --bg-feed-bar: #161616; /* 画面层深色条 */
+  --ink-primary: #161722; /* 主文本、粗体 */
+  --ink-secondary: #4f5158; /* 次级文本 */
+  --ink-tertiary: #8a8b99; /* 占位、辅助小字、时间戳 */
+  --skeleton: #f0f6fe; /* 骨架屏横条 */
+  --handle: #cfd0d2; /* 卡片顶部拖拽把手 */
+  --close-bg: #f4f3f4; /* X 关闭按钮圆形底 / chip 浅灰底 */
+  --accent: #ff2d62; /* 主强调：CTA、选中态 */
+  --accent-deep: #ff003c; /* 价格大字、渐变深端 */
+  --accent-cta: linear-gradient(135deg, #ff3949 0%, #ff4e59 100%); /* 底部主按钮 */
+  --accent-soft: #fff1f0; /* 浅粉强调底 */
+  --info: #139afd; /* 信息 chip 字 */
+  --info-bg: #e5f5ff; /* 信息 chip 底 */
+  --badge-pink: #e8568c; /* 图标/数量角标 */
+  --float-pill: rgba(0, 0, 0, 0.6); /* 浮标胶囊、toast */
+  --bg-garden: linear-gradient(180deg, #fcebf0 0%, #f4dce5 100%); /* 仅 P3 花园页页面底（柔粉渐变） */
+  --banner-tip: #fdf0c8; /* 提示条底（badge/运营提示） */
+  --star: #ffc531; /* 续火花式奖励/任务黄星 */
+  --star-badge: #ff5a45; /* 黄星上的红色 +N 角标 */
+  --success: #57b25e; /* 照料完成态 ✓、已完成文案（内容色，§2.1） */
+
+  /* 花园场景专用色板（§3-P3 真实感校准，补录自 §2.1 --soil-* / --grass-*） */
+  --grass-1: #8fbe5d; /* 草皮受光面 */
+  --grass-2: #6ba244; /* 草皮主色 */
+  --grass-3: #4f7d31; /* 草皮暗纹 */
+  --grass-hi: #a4cb72; /* 草皮亮纹 */
+  --soil-1: #6e4b2f; /* 土层受光面 */
+  --soil-2: #4a2f1b; /* 土层暗面 */
+  --soil-3: #38220f; /* 土层背光深端 */
+  --soil-grain: #8a6540; /* 土块颗粒亮 */
+  --soil-grain-dark: #2e1c0c; /* 土块颗粒暗 */
+  --scene-bg-1: #3c6b4c; /* 场景背景上 */
+  --scene-bg-2: #20382c; /* 场景背景下 */
+
+  /* ---- §2.3 圆角 / 间距 / 阴影 ---- */
+  --radius-pill: 999px;
+  --radius-card: 16px;
+  --radius-inner: 10px;
+  --space-page: 16px;
+  --space-block: 24px;
+  --space-item: 12px;
+  --shadow-float: 0 4px 16px rgba(0, 0, 0, 0.08); /* 仅浮层使用 */
+
+  --font-stack: -apple-system, 'PingFang SC', 'Helvetica Neue', 'Noto Sans SC', sans-serif;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  font-family: var(--font-stack);
+  font-size: 16px;
+  line-height: 1.55; /* §2.2 正文行高 */
+  color: var(--ink-primary);
+  background: #0e0e12; /* 框架外衬底（宽屏时） */
+}
+
+img {
+  display: block;
+  max-width: 100%;
+}
+
+button {
+  font-family: inherit;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: inherit;
+}
+
+/* ---- 程序框架：内容区 max-width 480px 居中（§7） ---- */
+.app-frame {
+  position: relative;
+  max-width: 480px;
+  margin: 0 auto;
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: var(--bg-page);
+  overflow: hidden;
+}
+
+/* ---- 字号阶梯（§2.2） ---- */
+.text-display {
+  font-size: 34px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.text-title {
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.text-tab {
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.text-body {
+  font-size: 16px;
+  font-weight: 400;
+}
+
+.text-caption {
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.text-mini {
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.ink-secondary {
+  color: var(--ink-secondary);
+}
+
+.ink-tertiary {
+  color: var(--ink-tertiary);
+}
+
+/* ---- §4.1 主按钮（CTA） ---- */
+.btn-cta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 48px;
+  border-radius: var(--radius-pill);
+  background: var(--accent-cta);
+  color: #fff;
+  font-size: 16px;
+  font-weight: 700;
+  transition: opacity 0.15s;
+}
+
+.btn-cta:active {
+  opacity: 0.85;
+}
+
+.btn-cta:disabled {
+  background: var(--handle);
+  opacity: 1;
+}
+
+/* ---- §4.3 次按钮 ---- */
+.btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 36px;
+  padding: 0 18px;
+  border-radius: var(--radius-pill);
+  background: var(--close-bg); /* 浅灰底无描边 */
+  color: var(--ink-primary);
+  font-size: 14px;
+  transition: opacity 0.15s;
+}
+
+.btn-ghost:active {
+  opacity: 0.7;
+}
+
+.btn-ghost:disabled {
+  color: var(--ink-tertiary);
+}
+
+.btn-ghost-outline {
+  background: #fff;
+  border: 1px solid var(--ink-primary);
+}
+
+/* ---- chips（§4.3，只读展示用浅灰底） ---- */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  height: 34px;
+  padding: 0 16px;
+  border-radius: var(--radius-pill);
+  background: var(--close-bg);
+  color: var(--ink-secondary);
+  font-size: 13px;
+}
+
+/* ---- §4.4 骨架屏 ---- */
+.skeleton-line {
+  height: 14px;
+  border-radius: 8px;
+  background: var(--skeleton);
+  animation: skeleton-breath 1.2s ease-in-out infinite;
+}
+
+@keyframes skeleton-breath {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+/* ---- AI 状态行（「AI 正在生成回答 …」/「AI 生成回答」） ---- */
+.ai-status {
+  font-size: 15px;
+  color: var(--ink-secondary);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ai-status b {
+  color: var(--ink-primary);
+  font-weight: 700;
+}
+
+/* 动态省略号 */
+.ai-dots i {
+  display: inline-block;
+  font-style: normal;
+  animation: dot-blink 1.2s infinite;
+}
+
+.ai-dots i:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.ai-dots i:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes dot-blink {
+  0%,
+  60%,
+  100% {
+    opacity: 0.2;
+  }
+  30% {
+    opacity: 1;
+  }
+}
+
+/* ---- 骨架 → 内容渐显（§6：渐显 + 自顶向下 8px，250ms） ---- */
+@keyframes content-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.content-in {
+  animation: content-in 250ms ease-out;
+}
+
+/* ---- toast（§3-P7：顶部下浮黑底白字胶囊，2s 自消） ---- */
+.toast {
+  position: fixed;
+  top: calc(16px + env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: min(420px, 86vw);
+  width: max-content;
+  padding: 10px 20px;
+  border-radius: var(--radius-pill);
+  background: var(--float-pill);
+  color: #fff;
+  font-size: 14px;
+  z-index: 200;
+}
+
+.toast-fade-enter-active,
+.toast-fade-leave-active {
+  transition: opacity 0.25s, transform 0.25s;
+}
+
+.toast-fade-enter-from,
+.toast-fade-leave-to {
+  opacity: 0;
+  transform: translate(-50%, -8px);
+}
+
+/* ---- 空态 ---- */
+.empty-state {
+  padding: 64px 24px;
+  text-align: center;
+  color: var(--ink-tertiary);
+  font-size: 14px;
+}
+
+/* ---- §8 减弱动态效果：退化为透明度渐变 ---- */
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-line,
+  .ai-dots i {
+    animation: none;
+    opacity: 0.7;
+  }
+
+  .content-in {
+    animation: content-fade-only 200ms ease-out;
+  }
+}
+
+@keyframes content-fade-only {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
