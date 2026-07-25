@@ -94,3 +94,14 @@ cd web && npm run build
 - `scripts/e2e_check.py`：退出码 0（229.8s，v0.1 链路 9 步）。
 - `npm run build`：通过。
 - 若继续调整前想先确认仓库健康，可直接运行上述三项（对旧代码应全绿）。
+
+## 8. 花卉线稿（flower-lineart skill，2026-07-25）
+
+- **任何线稿/花头渲染/花色/花型改动必须先调用 `flower-lineart` skill**（用户级 skills 目录），
+  规则单一事实来源是 `server/app/ai_gateway/catalog.py` 模块 docstring，改规则需两边同步。
+- 颜色规则：图鉴精确 hex > GENERIC_COLORS > 哈希派生；色名经 `normalize_color()`；
+  **渲染路由必须剥 `.png` 后缀**（曾致生产"红玫瑰画成紫色"事故，tests/test_art.py 常驻回归）。
+- 花型规则：7 枚举（rosette/daisy/disk/cup/lily/ball/cluster），VLM 输出 form →
+  Recognition.form → Plant.form → HouseItem.form → URL 传递；图鉴品种恒取图鉴画法。
+- 验收：pytest 全绿（test_art.py 像素级颜色断言）+ render_preview.py 拼图亲眼检查 +
+  art 端点缓存 max-age=300 不得调大。

@@ -22,6 +22,7 @@ class VlmResult:
     main_color: str        # 主色（中文，命中该品种可选颜色之一）
     secondary_color: str   # 辅色（同品种另一可选颜色；单色品种则与主色相同）
     confidence: float      # 置信度 0.85–0.97（mock 由哈希派生；真实由模型给出并截断到该区间）
+    form: str = "rosette"  # 花型（catalog.FORMS 之一），决定线稿轮廓
 
 
 def identify_flower(image_path: str) -> VlmResult:
@@ -39,8 +40,14 @@ def identify_flower(image_path: str) -> VlmResult:
 _SYSTEM = (
     "你是花卉识别专家。识别用户图片中的花朵：species 为中文通用品种名（如绣球、洋桔梗、向日葵，"
     "不确定时给出最接近的常见花卉名）；main_color 为主色，secondary_color 为辅色，均为简洁中文颜色名"
-    "（如红、粉、白、黄、紫、蓝、橙、绿），单色花两者相同；confidence 为 0 到 1 的置信度。"
-    "只输出 JSON：{\"species\":\"...\",\"main_color\":\"...\",\"secondary_color\":\"...\",\"confidence\":0.9}"
+    "（如红、粉、白、黄、紫、蓝、橙、绿），单色花两者相同；"
+    "form 为花型，必须从这 7 个英文枚举中选最接近的一个："
+    "rosette=重瓣层叠（玫瑰/月季/牡丹/康乃馨）、daisy=单瓣放射（洋甘菊/雏菊/波斯菊）、"
+    "disk=舌状花盘（向日葵/非洲菊）、cup=杯状花冠（郁金香）、lily=星型尖瓣（百合/萱草）、"
+    "ball=聚伞花球（绣球/丁香，许多小花攒成圆球）、cluster=星点散簇（满天星，细碎小花松散分布）；"
+    "confidence 为 0 到 1 的置信度。"
+    "只输出 JSON：{\"species\":\"...\",\"main_color\":\"...\",\"secondary_color\":\"...\","
+    "\"form\":\"rosette\",\"confidence\":0.9}"
 )
 
 
@@ -74,6 +81,9 @@ def _identify_ark(image_path: str) -> VlmResult:
     if not main_color:
         raise ark.ArkError("主色为空")
     secondary_color = str(result.get("secondary_color", "")).strip() or main_color
+    form = str(result.get("form", "")).strip()
+    if form not in catalog.FORMS:
+        form = catalog.form_for(species)  # 非法/缺失：图鉴品种取图鉴画法，否则回落 rosette
     try:
         confidence = min(0.97, max(0.85, float(result.get("confidence", 0.9))))
     except (TypeError, ValueError):
@@ -83,6 +93,7 @@ def _identify_ark(image_path: str) -> VlmResult:
         main_color=main_color,
         secondary_color=secondary_color,
         confidence=round(confidence, 2),
+        form=form,
     )
 
 
@@ -107,4 +118,5 @@ def _identify_mock(image_path: str) -> VlmResult:
         main_color=main_color,
         secondary_color=secondary_color,
         confidence=confidence,
+        form=catalog.form_for(species),
     )

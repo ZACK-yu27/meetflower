@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from .. import config
 from ..ai_gateway.art import ensure_stage_images, flower_image_url, stage_image_url
-from ..ai_gateway.catalog import CATALOG
+from ..ai_gateway.catalog import CATALOG, form_for
 from ..models import (
     Badge,
     Garden,
@@ -65,6 +65,7 @@ def seed_garden(session: Session, garden_id: int) -> None:
                     species=item["species"],
                     color=item["color"],
                     quantity=item["quantity"],
+                    form=form_for(item["species"]),
                     flower_image=flower_image_url(item["species"], item["color"]),
                 )
             )
@@ -205,7 +206,7 @@ def plant_out(session: Session, plant: Plant) -> PlantOut:
         main_color=plant.main_color,
         stage=plant.stage,
         stage_name=config.STAGE_NAMES[plant.stage],
-        stage_image=stage_image_url(plant.species, plant.main_color, plant.stage),
+        stage_image=stage_image_url(plant.species, plant.main_color, plant.stage, plant.form),
         stage_order=order,
         is_bloom=is_bloom,
         pressed=plant.pressed,
@@ -242,6 +243,7 @@ def create_plant(
 ) -> PlantOut:
     get_garden(session, garden_id)
     secondary_color: str
+    form: str | None
     if recognition_id is not None:
         recognition = session.get(Recognition, recognition_id)
         if recognition is None or (
@@ -251,9 +253,11 @@ def create_plant(
         species = recognition.species
         main_color = recognition.main_color
         secondary_color = recognition.secondary_color
+        form = recognition.form or form_for(species)  # 旧数据无 form：回落图鉴/rosette
     elif species and main_color:
         entry = CATALOG.get(species)
-        ensure_stage_images(species, main_color)  # 视觉资产走 catalog 复用；图鉴外品种由通用画法兜底
+        form = form_for(species)
+        ensure_stage_images(species, main_color, form)  # 视觉资产走 catalog 复用；图鉴外品种由通用画法兜底
         if entry is not None and main_color in entry["colors"]:
             colors = list(entry["colors"].keys())
             secondary_color = colors[(colors.index(main_color) + 1) % len(colors)]
@@ -268,6 +272,7 @@ def create_plant(
         species=species,
         main_color=main_color,
         secondary_color=secondary_color,
+        form=form,
         stage="seed",
         stage_advanced_at=datetime.now(),
     )

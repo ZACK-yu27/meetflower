@@ -32,7 +32,8 @@ def press_flower(session: Session, garden_id: int, plant_id: int) -> PressOut:
             species=plant.species,
             color=plant.main_color,
             quantity=0,
-            flower_image=flower_image_url(plant.species, plant.main_color),
+            form=plant.form,
+            flower_image=flower_image_url(plant.species, plant.main_color, plant.form),
         )
         session.add(item)
     item.quantity += 1

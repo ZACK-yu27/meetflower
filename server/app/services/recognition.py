@@ -81,8 +81,8 @@ def create_recognition(
 ) -> RecognitionOut:
     image_id, path = save_upload(session, data, suffix)
     vlm = identify_flower(path)
-    stage_images = ensure_stage_images(vlm.species, vlm.main_color)
-    flower_image = flower_image_url(vlm.species, vlm.main_color)
+    stage_images = ensure_stage_images(vlm.species, vlm.main_color, vlm.form)
+    flower_image = flower_image_url(vlm.species, vlm.main_color, vlm.form)
 
     # mock 同步生成（瞬时）；ark 首响先返回、科普异步补齐
     async_science = ai_settings.AI_PROVIDER == "ark" and background is not None
@@ -98,6 +98,7 @@ def create_recognition(
         main_color=vlm.main_color,
         secondary_color=vlm.secondary_color,
         confidence=vlm.confidence,
+        form=vlm.form,
         science_text=science_text,
         stage_images=stage_images,
         flower_image=flower_image,

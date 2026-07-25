@@ -34,6 +34,7 @@ class BouquetItem:
     species: str
     color: str
     count: int
+    form: str | None = None  # 花型（Pillow 合成时决定轮廓；None 回落图鉴/rosette）
 
 
 def _vgradient(size: int, top: str, bottom: str) -> Image.Image:
@@ -109,9 +110,9 @@ def _generate_mock(items: list[BouquetItem], out_stem: str) -> tuple[bytes, str]
     img = _vgradient(SIZE, _BG_TOP, _BG_BOTTOM).convert("RGBA")
 
     # 展开花材清单
-    heads: list[tuple[str, str]] = []
+    heads: list[tuple[str, str, str | None]] = []
     for it in items:
-        heads.extend([(it.species, it.color)] * it.count)
+        heads.extend([(it.species, it.color, it.form)] * it.count)
     rnd.shuffle(heads)
     positions, head_r = _head_positions(len(heads), rnd)
     gather = (300, 430)  # 花茎收束点（包装纸腰部）
@@ -138,8 +139,8 @@ def _generate_mock(items: list[BouquetItem], out_stem: str) -> tuple[bytes, str]
     img.alpha_composite(shadow.filter(ImageFilter.GaussianBlur(7)))
 
     # 4) 花头：复用 art.py 的花头渲染，随机小角度旋转增加自然感
-    for (species, color), (x, y) in zip(heads, positions):
-        head = render_flower_head(head_r * 2, species, color)
+    for (species, color, form), (x, y) in zip(heads, positions):
+        head = render_flower_head(head_r * 2, species, color, form)
         head = head.rotate(rnd.uniform(-18, 18), resample=Image.BICUBIC)
         img.alpha_composite(head, (int(x - head_r), int(y - head_r)))
 

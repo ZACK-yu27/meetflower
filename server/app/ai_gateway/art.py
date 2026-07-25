@@ -189,27 +189,53 @@ def _head_cluster(img, cx, cy, r, base, params):
         d.ellipse([px - cr, py - cr, px + cr, py + cr], fill=_shade(base, 1.1 if base != "#F3F0E9" else 0.9))
 
 
+def _head_ball(img, cx, cy, r, base, params):
+    """绣球：聚伞花球——密集小四瓣花攒成圆球（与满天星的松散点簇区分）。"""
+    rnd = random.Random(42)
+    outline = _shade(base, 0.75)
+    d = ImageDraw.Draw(img)
+    n = params["floret_count"]
+    floret_r = r * 0.30  # 每朵小花半径，足够大以相互交叠成球
+    for i in range(n):
+        # 均匀球面投影：黄金角螺旋分布在 0.68r 圆盘内，密集成球
+        a = math.radians(i * 137.5)
+        dist = 0.68 * r * math.sqrt((i + 0.5) / n)
+        px, py = cx + math.cos(a) * dist, cy + math.sin(a) * dist
+        # 边缘小花略暗，增强球体体积感
+        shade_f = 1.02 - 0.16 * (dist / (0.68 * r))
+        fill = _shade(base, shade_f)
+        for k in range(4):  # 4 片圆润花瓣，十字排布
+            pa = math.radians(k * 90 + (i % 4) * 22)
+            qx, qy = px + math.cos(pa) * floret_r * 0.62, py + math.sin(pa) * floret_r * 0.62
+            pr = floret_r * 0.55
+            d.ellipse([qx - pr, qy - pr, qx + pr, qy + pr], fill=fill, outline=outline)
+        cr = floret_r * 0.22  # 小芯
+        d.ellipse([px - cr, py - cr, px + cr, py + cr], fill=_shade(base, 1.18))
+
+
 _HEAD_STYLES = {
     "layered_round": _head_layered_round,
     "slender_many": _head_slender_many,
     "cup": _head_cup,
     "daisy": _head_daisy,
     "lily": _head_lily,
+    "ball": _head_ball,
     "cluster": _head_cluster,
 }
 
 
-def draw_flower_head(img: Image.Image, cx: float, cy: float, r: float, species: str, color: str) -> None:
-    """在 RGBA 图上 (cx,cy) 处画半径 r 的花头；图鉴品种用专属画法，其余用通用画法。"""
+def draw_flower_head(img: Image.Image, cx: float, cy: float, r: float, species: str, color: str,
+                     form: str | None = None) -> None:
+    """在 RGBA 图上 (cx,cy) 处画半径 r 的花头；图鉴品种用专属画法，其余按 form 选花型。"""
     base = catalog.color_hex(species, color)
-    params = catalog.draw_params(species)
+    params = catalog.draw_params(species, form)
     _HEAD_STYLES[params["style"]](img, cx, cy, r, base, params)
 
 
-def render_flower_head(size: int, species: str, color: str) -> Image.Image:
+def render_flower_head(size: int, species: str, color: str, form: str | None = None) -> Image.Image:
     """渲染透明底花朵特写图（imagegen 合成花束时缩放复用）。"""
     img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-    draw_flower_head(img, size / 2, size / 2, size * 0.46, species, color)
+    draw_flower_head(img, size / 2, size / 2, size * 0.46, species, color, form)
     return img
 
 
@@ -269,7 +295,7 @@ def _draw_stem(d: ImageDraw.ImageDraw, top_y: float) -> None:
     d.line([100, 148, 100, top_y], fill=_STEM, width=4)
 
 
-def _stage_image(species: str, color: str, stage: str) -> Image.Image:
+def _stage_image(species: str, color: str, stage: str, form: str | None = None) -> Image.Image:
     """地栽版阶段图：透明底，植物从土丘中长出，主体尽量撑满 200x200 画面。"""
     img = Image.new("RGBA", (IMG_SIZE, IMG_SIZE), (0, 0, 0, 0))
     _draw_mound(img)
@@ -300,35 +326,47 @@ def _stage_image(species: str, color: str, stage: str) -> Image.Image:
         _draw_stem(d, 122)
         _draw_leaf(img, 100, 138, -155, 22)
         _draw_leaf(img, 100, 128, -25, 22)
-        draw_flower_head(img, 100, 76, 48, species, color)
+        draw_flower_head(img, 100, 76, 48, species, color, form)
     return img
 
 
 # ---------- 对外接口（API.md §4） ----------
 
-def stage_image_url(species: str, main_color: str, stage: str) -> str:
-    """阶段图 URL：动态渲染端点（确定性 Pillow 资产，按需重生，不落盘不入库）。"""
+def stage_image_url(species: str, main_color: str, stage: str, form: str | None = None) -> str:
+    """阶段图 URL：动态渲染端点（确定性 Pillow 资产，按需重生，不落盘不入库）。
+
+    form 非空时 URL 多一段花型（图鉴外品种轮廓以 VLM 识别为准），
+    图鉴品种或无 form 的历史数据沿用原两段 URL。
+    """
+    if form:
+        return settings.public_url(
+            f"/api/v1/art/stage/{quote(species)}/{quote(main_color)}/{quote(form)}/{stage}.png"
+        )
     return settings.public_url(
         f"/api/v1/art/stage/{quote(species)}/{quote(main_color)}/{stage}.png"
     )
 
 
-def flower_image_url(species: str, main_color: str) -> str:
+def flower_image_url(species: str, main_color: str, form: str | None = None) -> str:
+    if form:
+        return settings.public_url(
+            f"/api/v1/art/flower/{quote(species)}/{quote(main_color)}/{quote(form)}.png"
+        )
     return settings.public_url(f"/api/v1/art/flower/{quote(species)}/{quote(main_color)}.png")
 
 
-def stage_image_png(species: str, main_color: str, stage: str) -> bytes:
+def stage_image_png(species: str, main_color: str, stage: str, form: str | None = None) -> bytes:
     buf = io.BytesIO()
-    _stage_image(species, main_color, stage).save(buf, format="PNG")
+    _stage_image(species, main_color, stage, form).save(buf, format="PNG")
     return buf.getvalue()
 
 
-def flower_image_png(species: str, main_color: str) -> bytes:
+def flower_image_png(species: str, main_color: str, form: str | None = None) -> bytes:
     buf = io.BytesIO()
-    render_flower_head(IMG_SIZE, species, main_color).save(buf, format="PNG")
+    render_flower_head(IMG_SIZE, species, main_color, form).save(buf, format="PNG")
     return buf.getvalue()
 
 
-def ensure_stage_images(species: str, main_color: str) -> dict[str, str]:
+def ensure_stage_images(species: str, main_color: str, form: str | None = None) -> dict[str, str]:
     """返回 {stage: url}（动态端点，首次访问时渲染；契约与历史版本一致）。"""
-    return {stage: stage_image_url(species, main_color, stage) for stage in catalog.STAGES}
+    return {stage: stage_image_url(species, main_color, stage, form) for stage in catalog.STAGES}

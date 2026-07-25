@@ -19,9 +19,31 @@ from .services.garden import seed_db
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(engine)
+    _ensure_columns()  # 轻量迁移：给存量表补新列（create_all 不会改已有表）
     with SessionLocal() as session:
         seed_db(session)  # 播种 garden id=1 与 resource_accounts / badges 行（幂等）
     yield
+
+
+def _ensure_columns() -> None:
+    """给已存在的表补新增列（SQLite/Postgres 均支持 ADD COLUMN IF NOT EXISTS 的等价写法）。
+
+    当前迁移：recognitions.form / plants.form（花型，2026-07-25 线稿花型系统）。
+    """
+    from sqlalchemy import inspect, text
+
+    wanted = {
+        "recognitions": {"form": "VARCHAR"},
+        "plants": {"form": "VARCHAR"},
+        "house_items": {"form": "VARCHAR"},
+    }
+    insp = inspect(engine)
+    with engine.begin() as conn:
+        for table, cols in wanted.items():
+            existing = {c["name"] for c in insp.get_columns(table)}
+            for col, ddl in cols.items():
+                if col not in existing:
+                    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} {ddl}"))
 
 
 app = FastAPI(title="抖音花园 MVP", lifespan=lifespan)

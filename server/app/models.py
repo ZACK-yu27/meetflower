@@ -41,6 +41,7 @@ class Recognition(Base):
     main_color: Mapped[str]
     secondary_color: Mapped[str]
     confidence: Mapped[float]
+    form: Mapped[str | None] = mapped_column(default=None)  # 花型（catalog.FORMS）；旧行 NULL 回落图鉴/rosette
     science_text: Mapped[str] = mapped_column(Text)
     stage_images: Mapped[dict] = mapped_column(JSON)  # {stage: /api/v1/art/stage/...}
     flower_image: Mapped[str]
@@ -65,6 +66,7 @@ class Plant(Base):
     species: Mapped[str]
     main_color: Mapped[str]
     secondary_color: Mapped[str]
+    form: Mapped[str | None] = mapped_column(default=None)  # 花型；旧行 NULL 回落图鉴/rosette
     stage: Mapped[str] = mapped_column(default="seed")
     ta_ready_since: Mapped[datetime | None] = mapped_column(default=None)  # TA 储备达标起的计时点
     stage_advanced_at: Mapped[datetime | None] = mapped_column(default=None)  # 进入当前阶段的时间
@@ -116,6 +118,7 @@ class HouseItem(Base):
     species: Mapped[str]
     color: Mapped[str]
     quantity: Mapped[int] = mapped_column(default=0)  # quantity=0 行保留（灰态项）
+    form: Mapped[str | None] = mapped_column(default=None)  # 花型（压花时从植株带入）
     flower_image: Mapped[str]
 
 

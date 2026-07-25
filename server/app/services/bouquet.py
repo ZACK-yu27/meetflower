@@ -74,8 +74,15 @@ def _texts_parallel(material: list[dict], occasion: str | None) -> tuple[str, st
         return f_note.result(), f_pack.result()
 
 
-def _gen_items(material: list[dict]) -> list[BouquetItem]:
-    return [BouquetItem(species=m["species"], color=m["color"], count=m["count"]) for m in material]
+def _gen_items(material: list[dict], forms: dict[tuple[str, str], str] | None = None) -> list[BouquetItem]:
+    forms = forms or {}
+    return [
+        BouquetItem(
+            species=m["species"], color=m["color"], count=m["count"],
+            form=forms.get((m["species"], m["color"])),
+        )
+        for m in material
+    ]
 
 
 def fill_preview_image(bouquet_id: int, material: list[dict]) -> None:
@@ -85,7 +92,14 @@ def fill_preview_image(bouquet_id: int, material: list[dict]) -> None:
         bouquet = db.get(Bouquet, bouquet_id)
         if bouquet is None or bouquet.preview_url:
             return
-        data, mime = generate_bouquet(_gen_items(material), out_stem=f"bouquet_{bouquet_id}")
+        # Pillow 合成路径需要花型：从花房库存取压花时记录的 form（赠送/无库存项回落图鉴/rosette）
+        forms: dict[tuple[str, str], str] = {}
+        if bouquet.garden_id is not None:
+            for m in material:
+                item = _stock(db, bouquet.garden_id, m["species"], m["color"])
+                if item is not None and item.form:
+                    forms[(m["species"], m["color"])] = item.form
+        data, mime = generate_bouquet(_gen_items(material, forms), out_stem=f"bouquet_{bouquet_id}")
         img = save_image(db, f"bouquet_{bouquet_id}", data, mime)
         bouquet.preview_url = image_url(img.id)
         db.commit()
@@ -138,7 +152,13 @@ def preview(
     # mock 同步生图（Pillow 瞬时）；ark 首响先返回、预览图异步补齐
     async_image = ai_settings.AI_PROVIDER == "ark" and background is not None
     if not async_image:
-        data, mime = generate_bouquet(_gen_items(material), out_stem=f"bouquet_{bouquet.id}")
+        # Pillow 合成路径需要花型：从花房库存取压花时记录的 form（赠送/无库存项回落图鉴/rosette）
+        forms: dict[tuple[str, str], str] = {}
+        for m in material:
+            item = _stock(session, garden_id, m["species"], m["color"])
+            if item is not None and item.form:
+                forms[(m["species"], m["color"])] = item.form
+        data, mime = generate_bouquet(_gen_items(material, forms), out_stem=f"bouquet_{bouquet.id}")
         img = save_image(session, f"bouquet_{bouquet.id}", data, mime)
         bouquet.preview_url = image_url(img.id)
 

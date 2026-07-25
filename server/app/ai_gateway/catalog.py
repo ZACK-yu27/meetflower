@@ -1,6 +1,19 @@
-"""花卉图鉴与通用品种兜底：品种/颜色中英文映射、绘制参数、科普文案模板、全局生长节律。
+"""花卉图鉴与通用品种兜底：品种/颜色/花型规则、绘制参数、科普文案模板、全局生长节律。
 
-数据来源 PRD §4 与 API.md §4；backend-core 的 app/config.py 从这里 import GROWTH_RHYTHM。
+线稿生成规则（单一事实来源，任何修改必须同步 flower-lineart skill）：
+
+【颜色规则】
+1. VLM 只许返回 STANDARD_COLORS 中的简洁中文色名（红/粉/白/黄/紫/蓝/橙/绿）；
+2. 渲染色 = 图鉴精确 hex > 通用色表 GENERIC_COLORS > 哈希派生（仅未收录色名）；
+3. 色名先经 normalize_color 归一化（去空格、去尾部"色"字），未收录才走哈希。
+
+【花型（轮廓）规则】
+1. 花型枚举 FORMS：rosette 重瓣层叠 / daisy 单瓣放射 / disk 舌状花盘 / cup 杯状 /
+   lily 星型尖瓣 / ball 聚伞花球（绣球型）/ cluster 星点散簇（满天星型）；
+2. 图鉴品种轮廓恒取图鉴 draw（不受 VLM 影响）；
+3. 图鉴外品种轮廓取 VLM 识别的 form（非法值回落 rosette）；
+4. form 经 URL 传递到渲染端点，保证「识别什么花型就画什么轮廓」。
+
 2026-07-25 起取消品种限制：CATALOG 外品种/颜色全部可用，经 GENERIC_COLORS /
 draw_params / science_text_for 等兜底函数获得通用渲染与文案。
 """
@@ -10,6 +23,21 @@ import hashlib
 
 # 成长阶段顺序（seed=0 … bloom=4）
 STAGES = ["seed", "sprout", "seedling", "bud", "bloom"]
+
+# 标准色名（VLM 输出约束 + 通用色表键）
+STANDARD_COLORS = ["红", "粉", "白", "黄", "紫", "蓝", "橙", "绿"]
+
+# 花型枚举（轮廓规则见模块 docstring）
+FORMS = ["rosette", "daisy", "disk", "cup", "lily", "ball", "cluster"]
+FORM_NAMES = {
+    "rosette": "重瓣层叠（玫瑰/月季/牡丹/康乃馨）",
+    "daisy": "单瓣放射（洋甘菊/雏菊/波斯菊）",
+    "disk": "舌状花盘（向日葵/非洲菊）",
+    "cup": "杯状花冠（郁金香）",
+    "lily": "星型尖瓣（百合/萱草）",
+    "ball": "聚伞花球（绣球/丁香）",
+    "cluster": "星点散簇（满天星）",
+}
 
 # 全局统一生长节律（API.md v0.2 §0：向日葵示例值，每阶段"每个人"所需资源，无缓冲期）
 GROWTH_RHYTHM = [
@@ -102,6 +130,20 @@ CATALOG = {
             "养护小贴士：喜干燥通风，倒挂阴干即成干花，能陪你很久很久。"
         ),
     },
+    "绣球": {
+        "species_en": "hydrangea",
+        "colors": {
+            "蓝": {"color_en": "blue", "hex": "#7C9FDC"},
+            "粉": {"color_en": "pink", "hex": "#F0A8C0"},
+            "紫": {"color_en": "purple", "hex": "#A98FD4"},
+        },
+        "draw": {"style": "ball", "floret_count": 14},
+        "science_template": (
+            "{species}是绣球花科绣球属的灌木，{main_color}色小花密密攒成圆润花球，团团可爱。"
+            "{main_color}{species}寓意团圆、美满与希望，花色还会随土壤酸碱变换。"
+            "养护小贴士：喜半阴湿润，花球怕暴晒，缺水会立刻蔫头，及时补水就能精神回来。"
+        ),
+    },
 }
 
 
@@ -112,7 +154,7 @@ def get_species(species: str) -> dict:
 
 # ---------- 图鉴外品种/颜色通用兜底（取消品种限制后） ----------
 
-# 常见颜色名 → (英文, hex)；未收录的颜色名走哈希派生（稳定）
+# 标准色名 → (英文, hex)；未收录的色名走哈希派生（稳定）
 GENERIC_COLORS = {
     "红": ("red", "#D2364C"),
     "粉": ("pink", "#F2A7C3"),
@@ -124,8 +166,16 @@ GENERIC_COLORS = {
     "绿": ("green", "#5FA24A"),
 }
 
-# 图鉴外品种的默认绘制参数（玫瑰式多层圆瓣，花心取主色深调）
-_GENERIC_DRAW = {"style": "layered_round", "layers": [(9, 0.95), (7, 0.68), (5, 0.42)]}
+# 各花型的通用绘制参数（图鉴外品种按 form 选用；图鉴品种恒用图鉴 draw）
+_FORM_DRAW = {
+    "rosette": {"style": "layered_round", "layers": [(9, 0.95), (7, 0.68), (5, 0.42)]},
+    "daisy": {"style": "daisy", "petal_count": 14, "petal_len": 1.0, "petal_w": 0.17, "center_hex": "#F2C230"},
+    "disk": {"style": "slender_many", "petal_count": 18, "petal_len": 1.0, "petal_w": 0.16, "center_hex": "#6B4422"},
+    "cup": {"style": "cup"},
+    "lily": {"style": "lily", "petal_count": 6},
+    "ball": {"style": "ball", "floret_count": 14},
+    "cluster": {"style": "cluster", "dot_count": 16, "dot_r": 0.14},
+}
 
 _GENERIC_SCIENCE_TEMPLATE = (
     "{species}是一株姿态动人的花，{main_color}色花冠是它最醒目的名片。"
@@ -138,6 +188,27 @@ def _stable_int(s: str) -> int:
     return int.from_bytes(hashlib.sha256(s.encode("utf-8")).digest()[:8], "big")
 
 
+def normalize_color(color: str) -> str:
+    """色名归一化：去空白、去尾部「色」字（如「蓝色」→「蓝」）、去英文句点。"""
+    c = (color or "").strip().rstrip(".。")
+    if c.endswith("色") and len(c) > 1:
+        c = c[:-1]
+    return c
+
+
+def form_for(species: str, hint: str | None = None) -> str:
+    """花型解析：图鉴品种恒取图鉴画法对应的 form > VLM hint（合法才用）> rosette。"""
+    entry = CATALOG.get(species)
+    if entry:
+        style = entry["draw"]["style"]
+        for form, draw in _FORM_DRAW.items():
+            if draw["style"] == style:
+                return form
+    if hint in FORMS:
+        return hint
+    return "rosette"
+
+
 def species_en(species: str) -> str:
     """品种英文名；图鉴外品种用稳定哈希名（custom_xxxxxxxx）。"""
     entry = CATALOG.get(species)
@@ -148,6 +219,7 @@ def species_en(species: str) -> str:
 
 def color_en(species: str, color: str) -> str:
     """颜色英文名：图鉴精确值 > 通用颜色表 > 稳定哈希名。"""
+    color = normalize_color(color)
     entry = CATALOG.get(species)
     if entry and color in entry["colors"]:
         return entry["colors"][color]["color_en"]
@@ -158,6 +230,7 @@ def color_en(species: str, color: str) -> str:
 
 def color_hex(species: str, color: str) -> str:
     """颜色 hex：图鉴精确值 > 通用颜色表 > 哈希派生（高饱和亮色调，稳定）。"""
+    color = normalize_color(color)
     entry = CATALOG.get(species)
     if entry and color in entry["colors"]:
         return entry["colors"][color]["hex"]
@@ -168,10 +241,12 @@ def color_hex(species: str, color: str) -> str:
     return f"#{int(r * 255):02X}{int(g * 255):02X}{int(b * 255):02X}"
 
 
-def draw_params(species: str) -> dict:
-    """绘制参数：图鉴品种用专属画法，图鉴外品种用通用多层圆瓣。"""
+def draw_params(species: str, form: str | None = None) -> dict:
+    """绘制参数：图鉴品种恒用图鉴画法；图鉴外品种按 form 取通用花型画法（见 FORMS）。"""
     entry = CATALOG.get(species)
-    return dict(entry["draw"]) if entry else dict(_GENERIC_DRAW)
+    if entry:
+        return dict(entry["draw"])
+    return dict(_FORM_DRAW[form_for(species, form)])
 
 
 def science_text_for(species: str, main_color: str, secondary_color: str) -> str:
