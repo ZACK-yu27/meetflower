@@ -1,9 +1,11 @@
 """花束预览生图：优先火山方舟 Seedream 写实花束摄影（settings.AI_PROVIDER=ark），失败降级 Pillow 合成。
 
 mock：包装纸（扇形）+ 按清单排布的花头（复用 art.py 的花头绘制）+ 缎带/阴影点缀。
-接口契约不变（API.md §4）：generate_bouquet(items, out_stem) -> /static/gen/{out_stem}.png。
+接口契约（API.md §4）：generate_bouquet(items, out_stem) -> (image_bytes, mime)，
+由调用方经 image_store 入库（重启/重新部署不丢失）。
 """
 
+import io
 import logging
 import math
 import random
@@ -12,11 +14,10 @@ from dataclasses import dataclass
 from PIL import Image, ImageDraw, ImageFilter
 
 from . import ark, settings
-from .art import GEN_DIR, render_flower_head
+from .art import render_flower_head
 
 logger = logging.getLogger("ai_gateway.imagegen")
 
-URL_PREFIX = "/static/gen"
 SIZE = 600
 
 # 配色
@@ -72,8 +73,8 @@ def _head_positions(n: int, rnd: random.Random) -> tuple[list[tuple[float, float
     return pos, head_r
 
 
-def generate_bouquet(items: list[BouquetItem], out_stem: str) -> str:
-    """花束预览图。ark 模式优先 Seedream 写实生成，失败降级 Pillow 合成。"""
+def generate_bouquet(items: list[BouquetItem], out_stem: str) -> tuple[bytes, str]:
+    """花束预览图，返回 (图片字节, mime)。ark 模式优先 Seedream 写实生成，失败降级 Pillow 合成。"""
     if settings.AI_PROVIDER == "ark":
         try:
             return _generate_ark(items, out_stem)
@@ -93,18 +94,17 @@ def _build_prompt(items: list[BouquetItem]) -> str:
     )
 
 
-def _generate_ark(items: list[BouquetItem], out_stem: str) -> str:
+def _generate_ark(items: list[BouquetItem], out_stem: str) -> tuple[bytes, str]:
     data = ark.image_b64(_build_prompt(items), size="2K")
-    # Seedream 返回格式随参数（jpeg/png），按魔数定扩展名
-    ext = ".png" if data.startswith(b"\x89PNG") else ".jpg"
-    (GEN_DIR / f"{out_stem}{ext}").write_bytes(data)
-    return settings.public_url(f"{URL_PREFIX}/{out_stem}{ext}")
+    # Seedream 返回格式随参数（jpeg/png），按魔数定 mime
+    mime = "image/png" if data.startswith(b"\x89PNG") else "image/jpeg"
+    return data, mime
 
 
 # ---------- 本地 Pillow 合成（mock） ----------
 
-def _generate_mock(items: list[BouquetItem], out_stem: str) -> str:
-    """合成图保存到 assets/gen/{out_stem}.png，返回 /static/gen/{out_stem}.png。"""
+def _generate_mock(items: list[BouquetItem], out_stem: str) -> tuple[bytes, str]:
+    """Pillow 合成，返回 PNG 字节。"""
     rnd = random.Random(out_stem)
     img = _vgradient(SIZE, _BG_TOP, _BG_BOTTOM).convert("RGBA")
 
@@ -152,6 +152,6 @@ def _generate_mock(items: list[BouquetItem], out_stem: str) -> str:
     d.polygon([(300, band_y), (338, band_y - 26), (332, band_y + 22)], outline="#9E3446")
     d.ellipse([292, band_y - 8, 308, band_y + 8], fill="#9E3446")
 
-    out_path = GEN_DIR / f"{out_stem}.png"
-    img.convert("RGB").save(out_path)
-    return settings.public_url(f"{URL_PREFIX}/{out_stem}.png")
+    buf = io.BytesIO()
+    img.convert("RGB").save(buf, format="PNG")
+    return buf.getvalue(), "image/png"

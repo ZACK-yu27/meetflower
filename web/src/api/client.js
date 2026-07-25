@@ -6,6 +6,27 @@ import axios from 'axios'
 const baseURL = import.meta.env.VITE_API_BASE_URL || '/'
 const client = axios.create({ baseURL, timeout: 30000 })
 
+// 匿名会话：每位访客一个独立花园（localStorage 持久化，免登录）
+const SESSION_KEY = 'flowers_session_id'
+let sessionId = localStorage.getItem(SESSION_KEY)
+if (!sessionId) {
+  sessionId = crypto.randomUUID()
+  localStorage.setItem(SESSION_KEY, sessionId)
+}
+client.interceptors.request.use((cfg) => {
+  cfg.headers['X-Session-Id'] = sessionId
+  return cfg
+})
+
+// 当前访客花园 id（首次访问 /me/garden 时后端自动创建）
+let gardenIdPromise = null
+export function getGardenId() {
+  if (!gardenIdPromise) {
+    gardenIdPromise = getGarden().then((view) => view.garden.garden_id)
+  }
+  return gardenIdPromise
+}
+
 // 1.1 识花（multipart 上传图片；真实 VLM 首响约 10–30s，单独放宽超时）
 export function recognize(imageFile) {
   const form = new FormData()
@@ -20,29 +41,35 @@ export function getRecognition(recognitionId) {
 
 // 1.2 种植（识花结果种入）
 export function plantRecognition(recognitionId) {
-  return client.post('/api/v1/gardens/1/plants', { recognition_id: recognitionId }).then((r) => r.data)
+  return getGardenId()
+    .then((gid) => client.post(`/api/v1/gardens/${gid}/plants`, { recognition_id: recognitionId }))
+    .then((r) => r.data)
 }
 
 // 1.2 复种（×0 灰卡「重新种植」：品种+颜色入参）
 export function replantFlower(species, mainColor) {
-  return client
-    .post('/api/v1/gardens/1/plants', { species, main_color: mainColor })
+  return getGardenId()
+    .then((gid) => client.post(`/api/v1/gardens/${gid}/plants`, { species, main_color: mainColor }))
     .then((r) => r.data)
 }
 
 // 1.3 花园聚合视图（resources 为 { me, ta } 双人账户；plants 含 me/ta 照料态）
 export function getGarden() {
-  return client.get('/api/v1/gardens/1').then((r) => r.data)
+  return client.get('/api/v1/me/garden').then((r) => r.data)
 }
 
 // 1.4 照料（空体即可；整组扣除 + 双人各完成一次）
 export function carePlant(plantId) {
-  return client.post(`/api/v1/gardens/1/plants/${plantId}/care`, {}).then((r) => r.data)
+  return getGardenId()
+    .then((gid) => client.post(`/api/v1/gardens/${gid}/plants/${plantId}/care`, {}))
+    .then((r) => r.data)
 }
 
 // 1.5 压花收藏
 export function pressPlant(plantId) {
-  return client.post(`/api/v1/gardens/1/plants/${plantId}/press`, {}).then((r) => r.data)
+  return getGardenId()
+    .then((gid) => client.post(`/api/v1/gardens/${gid}/plants/${plantId}/press`, {}))
+    .then((r) => r.data)
 }
 
 // 1.6 花房库存（含 quantity=0 灰态项）

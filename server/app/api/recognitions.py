@@ -10,6 +10,7 @@ from .. import config
 from ..db import get_db
 from ..schemas import RecognitionOut
 from ..services import recognition as recognition_service
+from ..sessions import resolve_garden_id
 
 router = APIRouter(tags=["recognitions"])
 
@@ -18,6 +19,7 @@ router = APIRouter(tags=["recognitions"])
 async def create_recognition(
     image: UploadFile = File(...),
     background: BackgroundTasks = None,
+    garden_id: int = Depends(resolve_garden_id),
     db: Session = Depends(get_db),
 ):
     suffix = Path(image.filename or "").suffix.lower()
@@ -38,7 +40,7 @@ async def create_recognition(
     if len(data) > config.MAX_UPLOAD_BYTES:
         raise HTTPException(status_code=422, detail="图片大小不能超过 10MB")
 
-    return recognition_service.create_recognition(db, data, suffix, background)
+    return recognition_service.create_recognition(db, garden_id, data, suffix, background)
 
 
 @router.get("/recognitions/{recognition_id}", response_model=RecognitionOut)

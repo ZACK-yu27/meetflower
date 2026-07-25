@@ -6,7 +6,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, text
 from sqlalchemy.orm import Session
 
 from .. import config
@@ -41,21 +41,19 @@ _RESOURCES = ("water", "sunlight", "nutrient")
 _LACK_TEXT = {"water": ("滴", "水"), "sunlight": ("缕", "阳光"), "nutrient": ("份", "养料")}
 
 
-# ---- 启动播种（幂等：只补缺失行；启动与 1.15 重置共用） ----
+# ---- 启动播种（幂等：只补缺失行；启动与新会话建园、1.15 重置共用） ----
 
-def seed_db(session: Session) -> None:
-    """播种 garden id=1、双方资源账户（me/ta 归零）、badge、预置花材 PRESTOCK_HOUSE。"""
-    if session.get(Garden, config.GARDEN_ID) is None:
-        session.add(Garden(id=config.GARDEN_ID, user_a=config.USER_A, user_b=config.USER_B))
+def seed_garden(session: Session, garden_id: int) -> None:
+    """为指定花园播种双方资源账户（归零）、badge、预置花材 PRESTOCK_HOUSE（不提交事务）。"""
     for user in config.USERS:
-        if session.get(ResourceAccount, (config.GARDEN_ID, user)) is None:
-            session.add(ResourceAccount(garden_id=config.GARDEN_ID, user=user))
-    if session.get(Badge, config.GARDEN_ID) is None:
-        session.add(Badge(garden_id=config.GARDEN_ID, has_update=False, message=config.BADGE_MESSAGE))
+        if session.get(ResourceAccount, (garden_id, user)) is None:
+            session.add(ResourceAccount(garden_id=garden_id, user=user))
+    if session.get(Badge, garden_id) is None:
+        session.add(Badge(garden_id=garden_id, has_update=False, message=config.BADGE_MESSAGE))
     for item in config.PRESTOCK_HOUSE:
         exists = session.scalar(
             select(HouseItem).where(
-                HouseItem.garden_id == config.GARDEN_ID,
+                HouseItem.garden_id == garden_id,
                 HouseItem.species == item["species"],
                 HouseItem.color == item["color"],
             )
@@ -63,13 +61,27 @@ def seed_db(session: Session) -> None:
         if exists is None:
             session.add(
                 HouseItem(
-                    garden_id=config.GARDEN_ID,
+                    garden_id=garden_id,
                     species=item["species"],
                     color=item["color"],
                     quantity=item["quantity"],
                     flower_image=flower_image_url(item["species"], item["color"]),
                 )
             )
+    session.flush()
+
+
+def seed_db(session: Session) -> None:
+    """播种默认花园 id=1（兼容无 Session 头的旧客户端与测试）。"""
+    if session.get(Garden, config.GARDEN_ID) is None:
+        session.add(Garden(id=config.GARDEN_ID, user_a=config.USER_A, user_b=config.USER_B))
+        session.flush()
+    seed_garden(session, config.GARDEN_ID)
+    if session.bind.dialect.name == "postgresql":
+        # 显式插入 id=1 不会推进 SERIAL 序列，修正避免后续新花园自增 id 冲突
+        session.execute(
+            text("SELECT setval('gardens_id_seq', (SELECT COALESCE(MAX(id), 1) FROM gardens))")
+        )
     session.commit()
 
 
@@ -232,7 +244,9 @@ def create_plant(
     secondary_color: str
     if recognition_id is not None:
         recognition = session.get(Recognition, recognition_id)
-        if recognition is None:
+        if recognition is None or (
+            recognition.garden_id is not None and recognition.garden_id != garden_id
+        ):
             raise DomainError(404, "识花记录不存在")
         species = recognition.species
         main_color = recognition.main_color

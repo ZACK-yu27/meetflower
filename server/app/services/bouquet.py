@@ -16,6 +16,7 @@ from ..ai_gateway import BouquetItem, generate_bouquet
 from ..ai_gateway import settings as ai_settings
 from ..ai_gateway.llm import arrangement_note, packaging_suggestion, recommend_bouquet
 from ..db import SessionLocal
+from ..image_store import image_url, save_image
 from ..models import Bouquet, HouseItem
 from ..schemas import (
     BouquetItemIn,
@@ -78,13 +79,15 @@ def _gen_items(material: list[dict]) -> list[BouquetItem]:
 
 
 def fill_preview_image(bouquet_id: int, material: list[dict]) -> None:
-    """后台任务：生成花束预览图并回写（ark 失败内部自动降级 Pillow，不抛异常）。"""
+    """后台任务：生成花束预览图入库并回写（ark 失败内部自动降级 Pillow，不抛异常）。"""
     db = SessionLocal()
     try:
         bouquet = db.get(Bouquet, bouquet_id)
         if bouquet is None or bouquet.preview_url:
             return
-        bouquet.preview_url = generate_bouquet(_gen_items(material), out_stem=f"bouquet_{bouquet_id}")
+        data, mime = generate_bouquet(_gen_items(material), out_stem=f"bouquet_{bouquet_id}")
+        img = save_image(db, f"bouquet_{bouquet_id}", data, mime)
+        bouquet.preview_url = image_url(img.id)
         db.commit()
     except Exception:  # noqa: BLE001 — 后台任务静默兜底
         logger.exception("花束预览图异步生成失败 bouquet_id=%s", bouquet_id)
@@ -128,14 +131,16 @@ def preview(
 
     check_stock(session, garden_id, normal)  # 快照校验不扣减；bonus 不校验
 
-    bouquet = Bouquet(items_json=material, occasion=occasion, status="draft")
+    bouquet = Bouquet(garden_id=garden_id, items_json=material, occasion=occasion, status="draft")
     session.add(bouquet)
-    session.flush()  # 先拿 id 作为生图文件名
+    session.flush()  # 先拿 id 作为图片名
 
     # mock 同步生图（Pillow 瞬时）；ark 首响先返回、预览图异步补齐
     async_image = ai_settings.AI_PROVIDER == "ark" and background is not None
     if not async_image:
-        bouquet.preview_url = generate_bouquet(_gen_items(material), out_stem=f"bouquet_{bouquet.id}")
+        data, mime = generate_bouquet(_gen_items(material), out_stem=f"bouquet_{bouquet.id}")
+        img = save_image(session, f"bouquet_{bouquet.id}", data, mime)
+        bouquet.preview_url = image_url(img.id)
 
     bouquet.arrangement_note, bouquet.packaging = _texts_parallel(material, occasion)
     session.commit()

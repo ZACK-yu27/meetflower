@@ -5,17 +5,19 @@
 
 import io
 import random
+import tempfile
+from pathlib import Path
 
 from PIL import Image, ImageDraw
 
-from .art import GEN_DIR, ensure_stage_images
+from .art import ensure_stage_images
 from .imagegen import BouquetItem, generate_bouquet
 from .llm import flower_profile
 from .vlm import identify_flower
 
 
 def _make_test_image(seed: int) -> str:
-    """构造一张内容随 seed 变化的测试图，落盘到 assets/uploads/。"""
+    """构造一张内容随 seed 变化的测试图，落盘到系统临时目录。"""
     rnd = random.Random(seed)
     img = Image.new("RGB", (120, 120), (rnd.randrange(256), rnd.randrange(256), rnd.randrange(256)))
     d = ImageDraw.Draw(img)
@@ -23,8 +25,7 @@ def _make_test_image(seed: int) -> str:
         x0, y0 = rnd.randrange(100), rnd.randrange(100)
         d.rectangle([x0, y0, x0 + rnd.randrange(10, 40), y0 + rnd.randrange(10, 40)],
                     fill=(rnd.randrange(256), rnd.randrange(256), rnd.randrange(256)))
-    path = GEN_DIR.parent / "uploads" / f"smoke_test_{seed}.png"
-    path.parent.mkdir(parents=True, exist_ok=True)
+    path = Path(tempfile.gettempdir()) / f"flowers_smoke_test_{seed}.png"
     img.save(path)
     return str(path)
 
@@ -54,17 +55,16 @@ def main() -> None:
         urls = ensure_stage_images(species, color)
         assert set(urls) == {"seed", "sprout", "seedling", "bud", "bloom"}
         for u in urls.values():
-            name = u.rsplit("/", 1)[-1]
-            assert (GEN_DIR / name).exists(), f"文件不存在: {name}"
+            assert u.startswith("/api/v1/art/stage/") and u.endswith(".png"), f"URL 异常: {u}"
         print(f"  {species}({color}): {urls['bloom']}")
 
     print("== 4. generate_bouquet ==")
-    url = generate_bouquet(
+    data, mime = generate_bouquet(
         [BouquetItem("玫瑰", "红", 3), BouquetItem("洋甘菊", "白", 3), BouquetItem("满天星", "紫", 2)],
         "smoke_bouquet",
     )
-    assert (GEN_DIR / "smoke_bouquet.png").exists()
-    print(f"  花束预览: {url}")
+    assert len(data) > 10 * 1024 and mime == "image/png"
+    print(f"  花束预览: {mime} {len(data)//1024} KB")
 
     print("\nSMOKE OK ✅")
 

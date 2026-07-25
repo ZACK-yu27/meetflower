@@ -23,15 +23,16 @@
 ```
 flowers/
 ├── docs/                # PRD.md v0.3（产品需求）、API.md v0.2（接口与内部契约）、前端设计规范.md v2.2（设计权威）
-├── server/              # FastAPI + SQLite 后端
+├── server/              # FastAPI 后端（生产 Postgres/Neon，本地默认 SQLite）
 │   ├── app/
-│   │   ├── main.py      # 入口：CORS、/static 挂载、启动播种 garden_id=1（含预置花材）
+│   │   ├── main.py      # 入口：CORS、启动播种默认花园（含预置花材）
+│   │   ├── sessions.py  # 匿名 Session → 独立花园（X-Session-Id 头，多用户隔离）
+│   │   ├── image_store.py # 图片二进制存 images 表（/api/v1/images/{id}）
 │   │   ├── config.py    # 生长数值（向日葵示例）、TA 自动照料延迟、订单节奏、预置花材等常量
 │   │   ├── models.py    # SQLAlchemy 2.x（resource_accounts 双人账户、plant_cares 双人照料等）
 │   │   ├── services/    # 业务逻辑（识花/花园/资源/花房/花束/订单/demo）
-│   │   ├── api/         # 路由（API.md §1 全部端点）
-│   │   ├── ai_gateway/  # mock VLM/LLM/生图 + Pillow 地栽版资产生成（可替换为真实模型）
-│   │   └── assets/      # 生成图与上传图（/static 挂载点）
+│   │   ├── api/         # 路由（API.md §1 全部端点 + /images + /art 动态渲染）
+│   │   └── ai_gateway/  # mock VLM/LLM/生图 + Pillow 地栽版资产生成（可替换为真实模型）
 │   └── tests/           # pytest（23 项，API v0.2 契约）
 ├── web/                 # Vue3 + Vite 移动端 H5：页面栈（无 TabBar）
 │   └── src/
@@ -89,6 +90,7 @@ cd web && npm run build
 - **模拟互动**：真实环境中水滴/阳光/养料来自抖音聊天与分享事件；Demo 由 P-chat 底部三个模拟器按钮代替（`POST /api/v1/demo/interactions`），资源来源文案与产品口径一致。
 - **双人照料**：每朵花的每个成长阶段，要求两人各自满足自己的资源条件并各点一次「照料这朵花」（整组扣除，无缓冲期）。TA 为虚拟人：资源达标后延迟 8 秒自动完成照料（`TA_CARE_DELAY_SECONDS`，`app/config.py` 可调）。
 - **阶段数值**：按向日葵示例（每人）：花种→萌芽 水×2；萌芽→幼苗 水×3+光×1；幼苗→花苞 水×4+光×2+养×2；花苞→盛放 水×5+光×3+养×3。
+- **多用户与持久化（v0.3）**：每位访客经 localStorage 匿名 UUID（`X-Session-Id` 头）获得**独立花园**，多人同时使用数据互不干扰；数据库生产环境为 Neon Postgres（本地默认 SQLite），上传图与花束预览图以二进制存库（`/api/v1/images/{id}`），阶段图经 `/api/v1/art/...` 动态渲染——重新部署、实例休眠均不丢数据。演示重置（1.15）仅清空当前会话的花园。
 - **真实模型（火山方舟）**：`server/app/ai_gateway/` 已接入真实模型——VLM 识花 / LLM 科普与推荐文案走 `doubao-seed-2-0-lite`（chat/completions），花束预览走 `doubao-seedream-5-0`（images/generations 写实花束摄影）。配置 `server/.env`（模板 `.env.example`，`AI_PROVIDER=ark` + `ARK_API_KEY`）即启用；未配置或 `AI_PROVIDER=mock` 时回落本地 mock（哈希识花 + 模板文案 + Pillow 合成），每次真实调用失败也会自动降级保证演示不中断。契约与配置细节见 docs/API.md §4/§4.1；成长阶段图仍为 Pillow 地栽版（需确定性与透明底，不走生图）。真实链路烟测：`server/.venv/Scripts/python scripts/ark_smoke.py`。时延优化：识花首响只做 VLM（`detail=low`），科普文案后台异步补齐（前端轮询 `GET /api/v1/recognitions/{id}`）；识花可用 `ARK_VLM_MODEL` 单独指定更快端点。
 - **视觉资产**：成长阶段图统一为**地栽版**（透明底、土丘底座、无花盆），花园场景直接摆放；花朵特写（透明底花头）用于花房与花束合成。
 - **电商页**：P6 为纯前端静态原型（演示数据集中在 `web/src/demo/shopDemo.js`），不调用后端接口、不接真实交易；服务端订单接口保留作为业务能力。

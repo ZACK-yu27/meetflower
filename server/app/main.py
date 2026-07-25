@@ -11,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from . import config
 from .db import Base, SessionLocal, engine, get_db  # noqa: F401  (get_db 供路由依赖)
 from . import models  # noqa: F401  注册全部表
-from .api import badge, bouquets, demo, gardens, house, orders, recognitions
+from .api import art, badge, bouquets, demo, gardens, house, images, orders, recognitions
 from .services import DomainError
 from .services.garden import seed_db
 
@@ -61,5 +61,7 @@ for router in (
     orders.router,
     demo.router,
     badge.router,
+    images.router,
+    art.router,
 ):
     app.include_router(router, prefix=API_PREFIX)

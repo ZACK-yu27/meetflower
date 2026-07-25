@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import delete
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from .. import config
@@ -24,7 +24,7 @@ from .garden import (
     account_bundle,
     get_account,
     get_plant,
-    seed_db,
+    seed_garden,
 )
 from .house import list_items
 
@@ -47,25 +47,25 @@ def fast_forward(session: Session, garden_id: int, plant_id: int) -> FastForward
     return FastForwardOut(plant_id=plant.id, stage=plant.stage, stage_name=config.STAGE_NAMES[plant.stage])
 
 
-def reset(session: Session) -> ResetOut:
-    """单事务：清空全部演示数据 → 重新播种（花园 1 + 双方账户归零 + badge + 预置花材）。幂等。"""
-    for model in (
-        Order,
-        Bouquet,
-        PlantCare,
-        Plant,
-        ResourceEvent,
-        ResourceAccount,
-        HouseItem,
-        Badge,
-        Recognition,
-    ):
-        session.execute(delete(model))
-    seed_db(session)  # 重新播种（内部 commit）
+def reset(session: Session, garden_id: int) -> ResetOut:
+    """单事务：清空该花园的演示数据 → 重新播种（双方账户归零 + badge + 预置花材）。幂等。"""
+    plant_ids = select(Plant.id).where(Plant.garden_id == garden_id)
+    session.execute(delete(PlantCare).where(PlantCare.plant_id.in_(plant_ids)))
+    session.execute(delete(Plant).where(Plant.garden_id == garden_id))
+    bouquet_ids = select(Bouquet.id).where(Bouquet.garden_id == garden_id)
+    session.execute(delete(Order).where(Order.bouquet_id.in_(bouquet_ids)))
+    session.execute(delete(Bouquet).where(Bouquet.garden_id == garden_id))
+    session.execute(delete(ResourceEvent).where(ResourceEvent.garden_id == garden_id))
+    session.execute(delete(ResourceAccount).where(ResourceAccount.garden_id == garden_id))
+    session.execute(delete(HouseItem).where(HouseItem.garden_id == garden_id))
+    session.execute(delete(Badge).where(Badge.garden_id == garden_id))
+    session.execute(delete(Recognition).where(Recognition.garden_id == garden_id))
+    seed_garden(session, garden_id)
+    session.commit()
 
-    me = get_account(session, config.GARDEN_ID, "me")
-    ta = get_account(session, config.GARDEN_ID, "ta")
-    house = list_items(session, config.GARDEN_ID)
+    me = get_account(session, garden_id, "me")
+    ta = get_account(session, garden_id, "ta")
+    house = list_items(session, garden_id)
     return ResetOut(
         ok=True,
         resources=DualResources(me=account_bundle(me), ta=account_bundle(ta)),

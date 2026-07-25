@@ -11,7 +11,6 @@ import pytest
 from sqlalchemy import select
 
 from app import config
-from app.ai_gateway.art import GEN_DIR
 from app.models import Badge, Bouquet, HouseItem, Order, Plant, PlantCare, ResourceAccount
 from app.schemas import BouquetItemIn
 from app.services import DomainError
@@ -65,7 +64,7 @@ def _grow_to_bloom(session, plant_id: int) -> None:
 
 
 def _plant_recognition(session, seed: int = 1):
-    rec = recognition_service.create_recognition(session, make_image_bytes(seed), ".png")
+    rec = recognition_service.create_recognition(session, config.GARDEN_ID, make_image_bytes(seed), ".png")
     plant = garden_service.create_plant(session, config.GARDEN_ID, rec.recognition_id)
     return rec, plant
 
@@ -73,14 +72,14 @@ def _plant_recognition(session, seed: int = 1):
 # ---------- 1.1 识花 ----------
 
 def test_recognition_dedupe(session):
-    rec = recognition_service.create_recognition(session, make_image_bytes(1), ".png")
+    rec = recognition_service.create_recognition(session, config.GARDEN_ID, make_image_bytes(1), ".png")
     assert rec.recognition_id == 1
-    assert rec.image_url.startswith("/static/uploads/")
+    assert rec.image_url.startswith("/api/v1/images/")
     assert set(rec.stage_images) == {"seed", "sprout", "seedling", "bud", "bloom"}
     assert 0.85 <= rec.confidence <= 0.97
     assert rec.science_text
     # 同图再识别 → 内容哈希去重，结果一致
-    rec_again = recognition_service.create_recognition(session, make_image_bytes(1), ".png")
+    rec_again = recognition_service.create_recognition(session, config.GARDEN_ID, make_image_bytes(1), ".png")
     assert rec_again.image_url == rec.image_url
     assert (rec_again.species, rec_again.main_color) == (rec.species, rec.main_color)
 
@@ -331,7 +330,7 @@ def test_press_flow_and_gray_zero_item(session):
     items = house_service.list_items(session, config.GARDEN_ID).items
     sunflower = next(i for i in items if i.species == "向日葵")
     assert sunflower.quantity == 0  # 灰态项仍在列表中
-    assert sunflower.flower_image.endswith("_flower.png")
+    assert sunflower.flower_image.startswith("/api/v1/art/flower/")
     quantities = [i.quantity for i in items]
     assert quantities == sorted(quantities, reverse=True)  # 按 quantity 降序
 
@@ -363,8 +362,7 @@ def test_preview_with_bonus_and_suggestion(session):
         occasion="情侣约会",
     )
     assert bouquet.status == "draft"
-    assert bouquet.preview_url == f"/static/gen/bouquet_{bouquet.bouquet_id}.png"
-    assert (GEN_DIR / f"bouquet_{bouquet.bouquet_id}.png").exists()
+    assert bouquet.preview_url.startswith("/api/v1/images/")
     assert bouquet.material_list == [
         {"species": "玫瑰", "color": "红", "count": 2},
         {"species": "洋甘菊", "color": "白", "count": 1},
@@ -525,7 +523,7 @@ def test_reset_idempotent(session):
     )
     order_service.create_order(session, bouquet.bouquet_id)
 
-    out = demo_service.reset(session)
+    out = demo_service.reset(session, config.GARDEN_ID)
     assert out.ok is True
     assert (out.resources.me.water, out.resources.me.sunlight, out.resources.me.nutrient) == (0, 0, 0)
     assert (out.resources.ta.water, out.resources.ta.sunlight, out.resources.ta.nutrient) == (0, 0, 0)
@@ -540,6 +538,6 @@ def test_reset_idempotent(session):
     assert view.plants == [] and view.events == []
 
     # 幂等：再调一次结果一致
-    out2 = demo_service.reset(session)
+    out2 = demo_service.reset(session, config.GARDEN_ID)
     assert out2.ok is True
     assert {(i.species, i.color): i.quantity for i in out2.house} == house

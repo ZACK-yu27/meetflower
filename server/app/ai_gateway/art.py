@@ -5,20 +5,16 @@
 特写图：透明底大花头（供花房/花束复用）。已生成的文件直接复用。
 """
 
+import io
 import math
 import random
-from pathlib import Path
+from urllib.parse import quote
 
 from PIL import Image, ImageChops, ImageDraw
 
 from . import catalog, settings
 
-# 生成图落盘目录：server/app/assets/gen（与 cwd 无关，按本文件位置推导）
-GEN_DIR = Path(__file__).resolve().parent.parent / "assets" / "gen"
-GEN_DIR.mkdir(parents=True, exist_ok=True)
-
 IMG_SIZE = 200          # 阶段图/特写图边长
-URL_PREFIX = "/static/gen"
 
 # 通用配色
 _SEED = "#4A3222"
@@ -311,23 +307,28 @@ def _stage_image(species: str, color: str, stage: str) -> Image.Image:
 # ---------- 对外接口（API.md §4） ----------
 
 def stage_image_url(species: str, main_color: str, stage: str) -> str:
-    return settings.public_url(f"{URL_PREFIX}/{catalog.file_stem(species, main_color)}_{stage}.png")
+    """阶段图 URL：动态渲染端点（确定性 Pillow 资产，按需重生，不落盘不入库）。"""
+    return settings.public_url(
+        f"/api/v1/art/stage/{quote(species)}/{quote(main_color)}/{stage}.png"
+    )
 
 
 def flower_image_url(species: str, main_color: str) -> str:
-    return settings.public_url(f"{URL_PREFIX}/{catalog.file_stem(species, main_color)}_flower.png")
+    return settings.public_url(f"/api/v1/art/flower/{quote(species)}/{quote(main_color)}.png")
+
+
+def stage_image_png(species: str, main_color: str, stage: str) -> bytes:
+    buf = io.BytesIO()
+    _stage_image(species, main_color, stage).save(buf, format="PNG")
+    return buf.getvalue()
+
+
+def flower_image_png(species: str, main_color: str) -> bytes:
+    buf = io.BytesIO()
+    render_flower_head(IMG_SIZE, species, main_color).save(buf, format="PNG")
+    return buf.getvalue()
 
 
 def ensure_stage_images(species: str, main_color: str) -> dict[str, str]:
-    """为 (品种,颜色) 生成 5 阶段图 + 花朵特写图（已存在则复用），返回 {stage: url}。"""
-    stem = catalog.file_stem(species, main_color)
-    urls: dict[str, str] = {}
-    for stage in catalog.STAGES:
-        path = GEN_DIR / f"{stem}_{stage}.png"
-        if not path.exists():
-            _stage_image(species, main_color, stage).save(path)
-        urls[stage] = settings.public_url(f"{URL_PREFIX}/{path.name}")
-    flower_path = GEN_DIR / f"{stem}_flower.png"
-    if not flower_path.exists():
-        render_flower_head(IMG_SIZE, species, main_color).save(flower_path)
-    return urls
+    """返回 {stage: url}（动态端点，首次访问时渲染；契约与历史版本一致）。"""
+    return {stage: stage_image_url(species, main_color, stage) for stage in catalog.STAGES}

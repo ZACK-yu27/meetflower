@@ -33,9 +33,18 @@
 ┌─────────────────────────────────────────────────────────────────┐
 │              Render（后端 API 服务）                             │
 │         ┌─────────────────────────────────────┐                 │
-│         │  FastAPI + SQLite + Pillow          │                 │
+│         │  FastAPI + Pillow                   │                 │
 │         │  火山方舟 AI API (可选 mock)         │                 │
-│         │  静态资源 /static（生成图+上传图）    │                 │
+│         │  图片存 Postgres，经 API 读取        │                 │
+│         └─────────────────────────────────────┘                 │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│              Neon（Serverless Postgres，新加坡）                  │
+│         ┌─────────────────────────────────────┐                 │
+│         │  花园/植株/花束/订单 + 图片二进制     │                 │
+│         │  免费档 0.5GB，重启部署不丢数据       │                 │
 │         └─────────────────────────────────────┘                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -105,7 +114,17 @@ git push origin main
 | `ARK_BASE_URL` | `https://ark.cn-beijing.volces.com/api/v3` | |
 | `ARK_CHAT_MODEL` | `doubao-seed-2-0-lite-260215` | |
 | `ARK_IMAGE_MODEL` | `doubao-seedream-5-0-260128` | |
+| `FLOWERS_DATABASE_URL` | `postgresql://...neon.tech/neondb?sslmode=require` | Neon 连接串（含密码，**勿提交到 git**），见 3.2a |
 | `PUBLIC_BASE_URL` | `https://<你的 Render 实际域名>` | 静态资源 URL 前缀，**必填**，见下方说明 |
+
+### 3.2a 准备 Neon Postgres（多用户 + 数据持久化）
+
+1. 打开 [neon.tech](https://neon.tech)，用 GitHub 登录
+2. **Create project**：名称随意（如 `flowers`），Region 选 **AWS Asia Pacific 1 (Singapore)**（与 Render 服务同区域，延迟最低），其余默认
+3. 创建后在 Dashboard 复制 **Connection string**（形如 `postgresql://neondb_owner:****@ep-xxx.ap-southeast-1.aws.neon.tech/neondb?sslmode=require`）
+4. 把它填到 Render 环境变量 `FLOWERS_DATABASE_URL`
+
+后端启动时自动建表并播种默认花园；每位访客（按浏览器匿名 Session）自动获得独立花园，数据互不干扰，重新部署不丢数据。
 
 > **⚠️ Render 域名说明**：`onrender.com` 子域名全局唯一。若 `flowers-api` 已被他人占用，Render 会分配带随机后缀的域名（如 `flowers-api-ab12.onrender.com`）。**以 Render Dashboard 服务页顶部显示的实际 URL 为准**，把它同时填到 `PUBLIC_BASE_URL` 和前端 `VITE_API_BASE_URL`。`PUBLIC_BASE_URL` 缺失时，生成图/上传图的 URL 是相对路径，会被浏览器解析到前端域名（Pages）下而 404。
 
@@ -125,8 +144,7 @@ https://flowers-api.onrender.com/api/v1/gardens/1
 
 **⚠️ 已知限制（Free Plan）**：
 - 服务 15 分钟无访问会休眠，下次请求需等待约 1 分钟唤醒
-- 每次代码部署后，SQLite 数据库会重置（因为无持久化卷）
-- 如需数据库持久化，升级到 Render Hobby ($5/月) 并添加 Disk Volume
+- 数据存 Neon Postgres，部署/重启不再丢失（图片也存库中）
 
 ---
 
@@ -258,14 +276,9 @@ Render Free 实例 15 分钟无访问会休眠。首次请求需要约 1 分钟�
 - 使用 [UptimeRobot](https://uptimerobot.com) 免费计划每 5 分钟 ping 一次后端，保持活跃
 - 或升级到 Render Starter ($7/月) 永不停机
 
-### Q2: SQLite 数据库每次部署后丢失？
+### Q2: 数据库每次部署后丢失？
 
-Render Free 没有持久化卷，每次 git push 部署后容器重建，SQLite 文件丢失。
-
-**解决方案**：
-- MVP 阶段可接受（Demo 数据本来就是演示用的）
-- 长期方案：升级 Render Hobby ($5/月) + 添加 Disk Volume，将 `FLOWERS_DATABASE_URL` 指向 `/var/lib/render/data/flowers.db`
-- 或使用 Render 免费 PostgreSQL（30 天有效期）
+已解决：数据库改为 Neon Postgres（Serverless，免费档），数据与图片均存于 Render 之外，部署/重启/休眠都不再丢失。早期版本的 SQLite 方案已废弃。
 
 ### Q3: 跨域错误（CORS）？
 

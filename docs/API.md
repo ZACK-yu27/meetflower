@@ -7,10 +7,11 @@
 ## 0. 通用约定
 
 - 后端：FastAPI，监听 `http://localhost:8000`；开发期 CORS 全开。
-- 前端：Vite dev server `http://localhost:5173`，代理 `/api` 与 `/static` → `http://localhost:8000`；前端一律使用相对路径请求。
-- 静态资源：FastAPI 将 `server/app/assets/` 挂载到 `/static/`；生成图 URL 形如 `/static/gen/<file>`，上传图 `/static/uploads/<file>`。
+- 前端：Vite dev server `http://localhost:5173`，代理 `/api` → `http://localhost:8000`；前端一律使用相对路径请求。
+- **多用户隔离（v0.3）**：前端在 localStorage 保存匿名 UUID，所有请求带 `X-Session-Id` 头；后端按 Session 映射独立花园（首次访问自动创建并播种，`GET /api/v1/me/garden` 返回当前会话花园）。未带头的请求回落到启动播种的默认花园 `garden_id = 1`。
+- 图片访问：上传原图与花束预览图存 Postgres `images` 表，经 `GET /api/v1/images/{id}` 读取；阶段图/花朵特写为确定性 Pillow 资产，经 `GET /api/v1/art/stage/{species}/{color}/{stage}.png` 与 `GET /api/v1/art/flower/{species}/{color}.png` 动态渲染（不落盘不入库）。
 - 错误响应统一：`{ "detail": "人类可读的中文错误信息" }`；库存/状态冲突 409，不存在 404，参数错误 422。
-- Demo 固定：`garden_id = 1`（user_a「我」= me，user_b「小葵」= ta）。`user` 字段取值仅 `"me" | "ta"`。
+- Demo 固定：每个花园内 user_a「我」= me，user_b「小葵」= ta。`user` 字段取值仅 `"me" | "ta"`。
 - 成长阶段：`seed(种子) → sprout(萌芽) → seedling(幼苗) → bud(花苞) → bloom(盛放)`；`stage_order`：0–4。
 - **生长节律（GROWTH_RHYTHM，向日葵示例值，每阶段"每个人"所需资源，无缓冲期）**：
   | 阶段 | 水滴 | 阳光 | 养料 |
@@ -53,7 +54,7 @@
       "main_color": "黄",
       "stage": "sprout",
       "stage_name": "萌芽",
-      "stage_image": "/static/gen/sunflower_yellow_sprout.png",
+      "stage_image": "/api/v1/art/stage/%E5%90%91%E6%97%A5%E8%91%B5/%E9%BB%84/sprout.png",
       "stage_order": 1,
       "is_bloom": false,
       "pressed": false,
@@ -96,8 +97,8 @@
 ```json
 {
   "items": [
-    { "item_id": 1, "species": "玫瑰", "color": "红", "quantity": 2, "flower_image": "/static/gen/rose_red_flower.png" },
-    { "item_id": 3, "species": "向日葵", "color": "黄", "quantity": 0, "flower_image": "/static/gen/sunflower_yellow_flower.png" }
+    { "item_id": 1, "species": "玫瑰", "color": "红", "quantity": 2, "flower_image": "/api/v1/art/flower/%E7%8E%AB%E7%91%B0/%E7%BA%A2.png" },
+    { "item_id": 3, "species": "向日葵", "color": "黄", "quantity": 0, "flower_image": "/api/v1/art/flower/%E5%90%91%E6%97%A5%E8%91%B5/%E9%BB%84.png" }
   ]
 }
 ```
@@ -119,7 +120,7 @@
 ```json
 {
   "bouquet_id": 1,
-  "preview_url": "/static/gen/bouquet_1.png",
+  "preview_url": "/api/v1/images/2",
   "material_list": [
     { "species": "玫瑰", "color": "红", "count": 2 },
     { "species": "满天星", "color": "白", "count": 1, "gifted": true }
@@ -176,22 +177,32 @@
 
 ### 1.15 演示重置 `POST /api/v1/demo/reset`（新增，「重新体验」）
 - 请求：`{}`
-- 处理（单事务）：清空 plants/plant_cares/resource_accounts/resource_events/badges/bouquets/orders/house_items/recognitions → 重新播种 garden 1 + 双方资源账户（归零）+ **预置花材**（`PRESTOCK_HOUSE`：玫瑰·红×2、洋甘菊·白×2、向日葵·黄×1）。
+- 处理（单事务）：清空**当前会话花园**的 plants/plant_cares/resource_accounts/resource_events/badges/bouquets/orders/house_items/recognitions → 重新播种该花园（双方资源账户归零 + **预置花材** `PRESTOCK_HOUSE`：玫瑰·红×2、洋甘菊·白×2、向日葵·黄×1）。其他访客的花园不受影响。
 - 响应 200：`{ "ok": true, "resources": { "me": {...}, "ta": {...} }, "house": [ 同 1.6 items ] }`
-- 启动播种（main.py lifespan）同样预置花材，幂等。
+- 启动播种（main.py lifespan）为默认花园 1 预置花材，幂等。
 
-## 2. 数据模型（SQLAlchemy + SQLite，库文件 `server/flowers.db`；v0.2 破坏性变更，删库重建）
+### 1.16 当前会话花园 `GET /api/v1/me/garden`（v0.3 新增）
+- 按 `X-Session-Id` 解析花园（首次访问自动创建并播种），响应同 1.3 聚合视图。
+- 前端用 `garden.garden_id` 拼 1.2/1.4/1.5 的路径；无头时回落花园 1。
+
+### 1.17 图片访问（v0.3 新增）
+- `GET /api/v1/images/{id}`：Image 表二进制（上传原图、花束预览图），`Cache-Control: immutable`。
+- `GET /api/v1/art/stage/{species}/{color}/{stage}.png`、`GET /api/v1/art/flower/{species}/{color}.png`：确定性 Pillow 资产动态渲染（品种/颜色需 URL 编码）。
+
+## 2. 数据模型（SQLAlchemy；生产 Postgres/Neon，本地默认 SQLite `server/flowers.db`）
 
 | 表 | 字段 |
 |---|---|
-| `recognitions` | 同 v0.1 |
+| `images`（v0.3 新） | id PK, name Unique（内容哈希/业务名去重）, data LargeBinary, mime, created_at |
+| `session_gardens`（v0.3 新） | session_id PK, garden_id FK, created_at |
+| `recognitions` | 同 v0.1 + **garden_id FK 可空**、**image_id FK 可空**（v0.3） |
 | `gardens` | id PK, user_a, user_b, created_at |
 | `plants` | id PK, garden_id FK, recognition_id FK **可空**（复种无）, species, main_color, secondary_color, stage, **ta_ready_since 可空**, **stage_advanced_at 可空**, pressed Bool, pressed_at 可空, created_at（删除 progress_* 与 buffered_until） |
 | `plant_cares`（新） | id PK, plant_id FK, stage, user(me/ta), completed_at；Unique(plant_id, stage, user) |
 | `resource_accounts` | **(garden_id, user) 复合 PK**, water/sunlight/nutrient Int 默认0 |
 | `resource_events` | id PK, garden_id, type, description, delta_json, occurred_at |
 | `house_items` | id PK, garden_id, species, color, quantity Int, flower_image；Unique(garden_id, species, color)（quantity=0 行保留） |
-| `bouquets` | id PK, items_json（bonus 项含 gifted:true）, preview_url, occasion 可空, arrangement_note/packaging 可空, status(draft/sent), created_at |
+| `bouquets` | id PK, **garden_id FK 可空（v0.3）**, items_json（bonus 项含 gifted:true）, preview_url, occasion 可空, arrangement_note/packaging 可空, status(draft/sent), created_at |
 | `orders` | id PK, bouquet_id FK, shop_name, status, **note 可空**, **accept_substitute Bool 默认 true**, created_at, status_updated_at |
 | `badges` | garden_id PK, has_update Bool, message |
 
@@ -228,8 +239,8 @@ ai_gateway 对外契约全部不变，内部按 `AI_PROVIDER` 双实现分发（
 | `flower_profile` | chat/completions 纯文本科普（2 句）；生长节律恒取 catalog；识花链路 ark 模式下经 BackgroundTasks 异步回写 | 图鉴模板（图鉴外品种用通用模板） |
 | `recommend_bouquet` | chat/completions JSON 模式，items 校验必须 ⊆ 库存且不超量，bonus 品种非空即可 | 意图映射规则 |
 | `arrangement_note` / `packaging_suggestion` | chat/completions 一句话 | 模板 |
-| `generate_bouquet` | images/generations（Seedream，size=2K、b64_json、无水印），按魔数存 .png/.jpg | Pillow 合成 |
-| `ensure_stage_images` 等 art.py | — | 恒为 Pillow（阶段资产需确定性 + 透明底，不走生图） |
+| `generate_bouquet` | images/generations（Seedream，size=2K、b64_json、无水印），返回 (字节, mime)，调用方存 `images` 表 | Pillow 合成（同返回字节） |
+| `ensure_stage_images` 等 art.py | — | 恒为 Pillow（阶段资产需确定性 + 透明底，不走生图）；URL 指向 /api/v1/art/... 动态渲染端点 |
 
 - 配置（`ai_gateway/settings.py`，独立加载避免与 app.config 循环导入）：`AI_PROVIDER=ark|mock`（未配置 `ARK_API_KEY` 自动 mock）、`ARK_BASE_URL`、`ARK_CHAT_MODEL=doubao-seed-2-0-lite-260215`、`ARK_VLM_MODEL`（识花专用，缺省同 chat）、`ARK_IMAGE_MODEL=doubao-seedream-5-0-260128`、`ARK_CHAT_TIMEOUT=90`、`ARK_IMAGE_TIMEOUT=120`；chat 调用固定 `reasoning_effort=low` 控制时延。时延优化（2026-07-25 二轮）：VLM 图片 `detail=low`、科普文案 2 句且 max_tokens=200、识花首响与科普解耦（首响≈VLM 耗时，科普后台异步补齐）。时延优化（2026-07-25 三轮，花束链路）：搭配说明/包装建议 ThreadPoolExecutor 并行、预览首响与生图解耦（预览图后台生成，超时自动降级 Pillow 保底出图）。生图 size 用 2K（seedream-5-0 最小档位，1K 不被接受；实测约 25s）。
 - 密钥经环境变量或 `server/.env`（本地，勿提交；`server/.env.example` 为模板）。

@@ -3,7 +3,6 @@
 from fastapi import APIRouter, BackgroundTasks, Depends
 from sqlalchemy.orm import Session
 
-from .. import config
 from ..db import get_db
 from ..schemas import (
     BouquetOut,
@@ -15,14 +14,20 @@ from ..schemas import (
 )
 from ..services import bouquet as bouquet_service
 from ..services import order as order_service
+from ..sessions import resolve_garden_id
 
 router = APIRouter(tags=["bouquets"])
 
 
 @router.post("/bouquets/preview", response_model=BouquetOut)
-def preview(body: BouquetPreviewRequest, background: BackgroundTasks, db: Session = Depends(get_db)):
+def preview(
+    body: BouquetPreviewRequest,
+    background: BackgroundTasks,
+    garden_id: int = Depends(resolve_garden_id),
+    db: Session = Depends(get_db),
+):
     return bouquet_service.preview(
-        db, config.GARDEN_ID, body.items, bonus=body.bonus, occasion=body.occasion,
+        db, garden_id, body.items, bonus=body.bonus, occasion=body.occasion,
         background=background,
     )
 
@@ -33,8 +38,12 @@ def read_bouquet(bouquet_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/bouquets/recommend", response_model=RecommendOut)
-def recommend(body: RecommendRequest, db: Session = Depends(get_db)):
-    return bouquet_service.recommend(db, config.GARDEN_ID, body.occasion)
+def recommend(
+    body: RecommendRequest,
+    garden_id: int = Depends(resolve_garden_id),
+    db: Session = Depends(get_db),
+):
+    return bouquet_service.recommend(db, garden_id, body.occasion)
 
 
 @router.post("/bouquets/{bouquet_id}/orders", response_model=OrderCreatedOut)

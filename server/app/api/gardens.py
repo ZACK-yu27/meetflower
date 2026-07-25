@@ -1,4 +1,4 @@
-"""花园路由：1.2 种植/复种 / 1.3 聚合视图 / 1.4 照料 / 1.5 压花收藏。"""
+"""花园路由：1.2 种植/复种 / 1.3 聚合视图 / 1.4 照料 / 1.5 压花收藏 / 当前会话花园。"""
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
@@ -7,8 +7,15 @@ from ..db import get_db
 from ..schemas import CareOut, GardenOut, PlantCreateRequest, PlantOut, PressOut
 from ..services import garden as garden_service
 from ..services import house as house_service
+from ..sessions import resolve_garden_id
 
 router = APIRouter(tags=["gardens"])
+
+
+@router.get("/me/garden", response_model=GardenOut)
+def get_my_garden(garden_id: int = Depends(resolve_garden_id), db: Session = Depends(get_db)):
+    """当前会话的花园聚合视图（首次访问自动创建并播种独立花园）。"""
+    return garden_service.get_garden_view(db, garden_id)
 
 
 @router.post("/gardens/{garden_id}/plants", response_model=PlantOut)

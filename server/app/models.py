@@ -2,23 +2,47 @@
 
 from datetime import datetime
 
-from sqlalchemy import JSON, ForeignKey, Text, UniqueConstraint
+from sqlalchemy import JSON, ForeignKey, LargeBinary, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .db import Base
+
+
+class Image(Base):
+    """图片二进制存储（上传原图 / Seedream 花束图）：重启与重新部署不丢失，经 /api/v1/images/{id} 访问。"""
+
+    __tablename__ = "images"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(unique=True, index=True)  # 内容哈希或业务名，get-or-create 去重
+    data: Mapped[bytes] = mapped_column(LargeBinary)
+    mime: Mapped[str]
+    created_at: Mapped[datetime] = mapped_column(default=datetime.now)
+
+
+class SessionGarden(Base):
+    """匿名会话 → 花园映射：每位访客（前端 localStorage UUID）一个独立花园。"""
+
+    __tablename__ = "session_gardens"
+
+    session_id: Mapped[str] = mapped_column(primary_key=True)
+    garden_id: Mapped[int] = mapped_column(ForeignKey("gardens.id"))
+    created_at: Mapped[datetime] = mapped_column(default=datetime.now)
 
 
 class Recognition(Base):
     __tablename__ = "recognitions"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    image_path: Mapped[str]
+    garden_id: Mapped[int | None] = mapped_column(ForeignKey("gardens.id"), default=None)
+    image_id: Mapped[int | None] = mapped_column(ForeignKey("images.id"), default=None)
+    image_path: Mapped[str]  # VLM 临时文件路径（仅识别期间使用，不作为访问 URL）
     species: Mapped[str]
     main_color: Mapped[str]
     secondary_color: Mapped[str]
     confidence: Mapped[float]
     science_text: Mapped[str] = mapped_column(Text)
-    stage_images: Mapped[dict] = mapped_column(JSON)  # {stage: /static/gen/...}
+    stage_images: Mapped[dict] = mapped_column(JSON)  # {stage: /api/v1/art/stage/...}
     flower_image: Mapped[str]
     created_at: Mapped[datetime] = mapped_column(default=datetime.now)
 
@@ -99,6 +123,7 @@ class Bouquet(Base):
     __tablename__ = "bouquets"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    garden_id: Mapped[int | None] = mapped_column(ForeignKey("gardens.id"), default=None)
     items_json: Mapped[list] = mapped_column(JSON)  # [{species, color, count(, gifted: true)}]
     preview_url: Mapped[str | None] = mapped_column(default=None)
     occasion: Mapped[str | None] = mapped_column(default=None)

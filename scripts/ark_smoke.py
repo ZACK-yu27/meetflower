@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "server"))
 
 from app.ai_gateway import settings  # noqa: E402
-from app.ai_gateway.art import ensure_stage_images, GEN_DIR  # noqa: E402
+from app.ai_gateway.art import stage_image_png  # noqa: E402
 from app.ai_gateway.imagegen import BouquetItem, generate_bouquet  # noqa: E402
 from app.ai_gateway.llm import arrangement_note, flower_profile, packaging_suggestion, recommend_bouquet  # noqa: E402
 from app.ai_gateway.vlm import identify_flower  # noqa: E402
@@ -22,9 +22,10 @@ assert settings.AI_PROVIDER == "ark", "AI_PROVIDER 不是 ark（检查 server/.e
 
 fails = []
 
-# 1) VLM 识花：用 Pillow 生成的向日葵·黄盛放图作输入
-stage_images = ensure_stage_images("向日葵", "黄")
-bloom_path = GEN_DIR / Path(stage_images["bloom"]).name
+# 1) VLM 识花：用 Pillow 生成的向日葵·黄盛放图作输入（写临时文件供 VLM 读取）
+bloom_path = ROOT / "server" / "app" / "assets" / "uploads" / "ark_smoke_bloom.png"
+bloom_path.parent.mkdir(parents=True, exist_ok=True)
+bloom_path.write_bytes(stage_image_png("向日葵", "黄", "bloom"))
 t0 = time.time()
 vlm = identify_flower(str(bloom_path))
 print(f"[1] VLM 识花: {vlm.species}/{vlm.main_color}/辅{vlm.secondary_color} conf={vlm.confidence} ({time.time()-t0:.1f}s)")
@@ -58,12 +59,11 @@ print(f"    包装建议: {pack}")
 # 5) Seedream 花束生图
 t0 = time.time()
 items = [BouquetItem(**{k: i[k] for k in ("species", "color", "count")}) for i in material]
-url = generate_bouquet(items, "ark_smoke_bouquet")
-png = GEN_DIR / "ark_smoke_bouquet.png"
-size = png.stat().st_size if png.exists() else 0
-print(f"[5] 花束生图({time.time()-t0:.1f}s): {url} ({size//1024} KB)")
+data, mime = generate_bouquet(items, "ark_smoke_bouquet")
+size = len(data)
+print(f"[5] 花束生图({time.time()-t0:.1f}s): mime={mime} ({size//1024} KB)")
 if size < 50 * 1024:
-    fails.append(f"生图文件异常（{size} bytes）——可能走了 Pillow 降级，查看日志")
+    fails.append(f"生图字节异常（{size} bytes）——可能走了 Pillow 降级，查看日志")
 
 print()
 print("RESULT:", "ALL PASS" if not fails else f"CHECK: {fails}")

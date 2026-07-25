@@ -9,6 +9,7 @@
 
 import hashlib
 import logging
+import tempfile
 from pathlib import Path
 
 from fastapi import BackgroundTasks
@@ -17,8 +18,8 @@ from sqlalchemy.orm import Session
 from .. import config
 from ..ai_gateway import ensure_stage_images, flower_image_url, flower_profile, identify_flower
 from ..ai_gateway import settings as ai_settings
-from ..ai_gateway.settings import public_url
 from ..db import SessionLocal
+from ..image_store import image_url, save_image
 from ..models import Recognition
 from ..schemas import RecognitionOut
 from . import DomainError
@@ -26,20 +27,25 @@ from . import DomainError
 logger = logging.getLogger("services.recognition")
 
 
-def save_upload(data: bytes, suffix: str) -> tuple[Path, str]:
-    """按内容哈希命名保存上传图（相同内容去重复用），返回 (本地路径, URL)。"""
+def save_upload(session: Session, data: bytes, suffix: str) -> tuple[int, str]:
+    """上传图入库（按内容哈希去重），并写临时文件供 VLM 读取，返回 (image_id, 临时路径)。"""
     digest = hashlib.sha256(data).hexdigest()[:12]
-    name = f"{digest}{suffix}"
-    path = config.UPLOADS_DIR / name
-    if not path.exists():
-        path.write_bytes(data)
-    return path, public_url(f"/static/uploads/{name}")
+    mime = "image/png" if suffix == ".png" else "image/jpeg"
+    img = save_image(session, f"upload_{digest}{suffix}", data, mime)
+    tmp_path = config.UPLOADS_DIR / f"{digest}{suffix}"
+    try:
+        if not tmp_path.exists():
+            tmp_path.write_bytes(data)
+    except OSError:  # 目录不可写时退到系统临时目录（VLM 仅需识别期间可读）
+        tmp_path = Path(tempfile.gettempdir()) / f"flowers_upload_{digest}{suffix}"
+        tmp_path.write_bytes(data)
+    return img.id, str(tmp_path)
 
 
 def _out(recognition: Recognition) -> RecognitionOut:
     return RecognitionOut(
         recognition_id=recognition.id,
-        image_url=public_url(f"/static/uploads/{Path(recognition.image_path).name}"),
+        image_url=image_url(recognition.image_id),
         species=recognition.species,
         main_color=recognition.main_color,
         secondary_color=recognition.secondary_color,
@@ -68,12 +74,13 @@ def fill_science_text(recognition_id: int, species: str, main_color: str, second
 
 def create_recognition(
     session: Session,
+    garden_id: int,
     data: bytes,
     suffix: str,
     background: BackgroundTasks | None = None,
 ) -> RecognitionOut:
-    path, image_url = save_upload(data, suffix)
-    vlm = identify_flower(str(path))
+    image_id, path = save_upload(session, data, suffix)
+    vlm = identify_flower(path)
     stage_images = ensure_stage_images(vlm.species, vlm.main_color)
     flower_image = flower_image_url(vlm.species, vlm.main_color)
 
@@ -84,7 +91,9 @@ def create_recognition(
     ).science_text
 
     recognition = Recognition(
-        image_path=str(path),
+        garden_id=garden_id,
+        image_id=image_id,
+        image_path=path,
         species=vlm.species,
         main_color=vlm.main_color,
         secondary_color=vlm.secondary_color,

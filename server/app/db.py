@@ -29,7 +29,14 @@ if DATABASE_URL.startswith("sqlite:///") and not DATABASE_URL.startswith("sqlite
     except OSError:
         pass  # 目录已存在或无权创建，后续 SQLAlchemy 会报更具体的错
 
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+_IS_SQLITE = DATABASE_URL.startswith("sqlite")
+
+engine = create_engine(
+    DATABASE_URL,
+    # check_same_thread 仅 SQLite 需要；Postgres（psycopg2）不接受该参数
+    connect_args={"check_same_thread": False} if _IS_SQLITE else {},
+    pool_pre_ping=True,  # Neon 闲置休眠后连接可能失效，取用前先探测
+)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
 
 
