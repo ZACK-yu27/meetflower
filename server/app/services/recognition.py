@@ -16,7 +16,13 @@ from fastapi import BackgroundTasks
 from sqlalchemy.orm import Session
 
 from .. import config
-from ..ai_gateway import ensure_stage_images, flower_image_url, flower_profile, identify_flower
+from ..ai_gateway import (
+    ensure_stage_images,
+    flower_image_url,
+    flower_profile,
+    identify_flower,
+    identify_resemble,
+)
 from ..ai_gateway import settings as ai_settings
 from ..db import SessionLocal
 from ..image_store import image_url, save_image
@@ -45,7 +51,7 @@ def save_upload(session: Session, data: bytes, suffix: str) -> tuple[int, str]:
 def _out(recognition: Recognition) -> RecognitionOut:
     return RecognitionOut(
         recognition_id=recognition.id,
-        image_url=image_url(recognition.image_id),
+        image_url=image_url(recognition.image_id) if recognition.image_id else "",
         species=recognition.species,
         main_color=recognition.main_color,
         secondary_color=recognition.secondary_color,
@@ -53,6 +59,7 @@ def _out(recognition: Recognition) -> RecognitionOut:
         science_text=recognition.science_text or "",
         flower_image=recognition.flower_image,
         stage_images=recognition.stage_images,
+        resemble=recognition.resemble_attrs,
     )
 
 
@@ -120,4 +127,72 @@ def get_recognition(session: Session, recognition_id: int) -> RecognitionOut:
     recognition = session.get(Recognition, recognition_id)
     if recognition is None:
         raise DomainError(404, "识花记录不存在")
+    return _out(recognition)
+
+
+# ---- 广义的"花"（视频识别，规则见 docs/flower_resemble.md） ----
+
+def save_video_temp(data: bytes, suffix: str) -> str:
+    """视频写临时文件（不入库：体积大且识别后无需保留），返回路径。"""
+    digest = hashlib.sha256(data).hexdigest()[:12]
+    tmp_path = config.UPLOADS_DIR / f"video_{digest}{suffix}"
+    try:
+        if not tmp_path.exists():
+            tmp_path.write_bytes(data)
+    except OSError:
+        tmp_path = Path(tempfile.gettempdir()) / f"flowers_video_{digest}{suffix}"
+        tmp_path.write_bytes(data)
+    return str(tmp_path)
+
+
+def create_resemble_recognition(
+    session: Session,
+    garden_id: int,
+    data: bytes,
+    suffix: str,
+    background: BackgroundTasks | None = None,
+) -> RecognitionOut:
+    """视频 → 两段式识别（属性抽取→花卉匹配）→ 与拍照识别同一 Recognition 落库。
+
+    封面图：ark 路径首帧入库（image_id）；mock 无封面（image_url 空串，前端用本地视频预览）。
+    """
+    path = save_video_temp(data, suffix)
+    vlm, attrs, poster = identify_resemble(path)
+
+    image_id: int | None = None
+    if poster:
+        digest = hashlib.sha256(data).hexdigest()[:12]
+        image_id = save_image(session, f"upload_vposter_{digest}.jpg", poster, "image/jpeg").id
+
+    stage_images = ensure_stage_images(vlm.species, vlm.main_color, vlm.form)
+    flower_image = flower_image_url(vlm.species, vlm.main_color, vlm.form)
+
+    async_science = ai_settings.AI_PROVIDER == "ark" and background is not None
+    science_text = "" if async_science else flower_profile(
+        vlm.species, vlm.main_color, vlm.secondary_color
+    ).science_text
+
+    recognition = Recognition(
+        garden_id=garden_id,
+        image_id=image_id,
+        image_path=path,
+        species=vlm.species,
+        main_color=vlm.main_color,
+        secondary_color=vlm.secondary_color,
+        confidence=vlm.confidence,
+        form=vlm.form,
+        resemble_attrs=attrs,
+        science_text=science_text,
+        stage_images=stage_images,
+        flower_image=flower_image,
+    )
+    session.add(recognition)
+    session.commit()
+    session.refresh(recognition)
+
+    if async_science:
+        background.add_task(
+            fill_science_text, recognition.id, vlm.species, vlm.main_color, vlm.secondary_color
+        )
+
     return _out(recognition)

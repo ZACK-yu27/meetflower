@@ -105,3 +105,12 @@ cd web && npm run build
   Recognition.form → Plant.form → HouseItem.form → URL 传递；图鉴品种恒取图鉴画法。
 - 验收：pytest 全绿（test_art.py 像素级颜色断言）+ render_preview.py 拼图亲眼检查 +
   art 端点缓存 max-age=300 不得调大。
+
+## 9. 广义的花（flower-resemble skill，2026-07-26）
+
+- 视频识花链路已上线（PRD §5 原"本期不做"项启动）：规则单一事实来源 `docs/flower_resemble.md`，
+  **任何本链路改动必须先调用 `flower-resemble` skill**。
+- 两段式：抽帧（video.py，每 3s 1 帧 ≤8 帧，imageio-ffmpeg）→ VLM 抽属性（subject/shape/color/texture）
+  → LLM 匹配花卉（输出与拍照识别同格式 + reason）；结果复用拍照全链路（同表/同种植/同线稿/同科普）。
+- 端点 `POST /api/v1/recognitions/video`（≤30MB）；`RecognitionOut.resemble` 拍照识别恒为 null。
+- 新依赖 imageio-ffmpeg（requirements.txt，自带静态 ffmpeg，Render 免装）。

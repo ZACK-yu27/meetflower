@@ -1,9 +1,10 @@
 <template>
   <!-- P2 AI 科普页：上屏图片（约40%）+ 半屏卡片（4:6 ⇄ 2:8 双吸附档） -->
   <div ref="pageEl" class="p2-page">
-    <!-- 上屏所拍花图 -->
+    <!-- 上屏所拍花图（视频入口为静音循环预览） -->
     <div class="p2-img-wrap" :style="{ height: `calc(100% - ${cardH}%)` }">
-      <img class="p2-img" :src="previewUrl" alt="所拍花图" />
+      <video v-if="isVideo" class="p2-img" :src="previewUrl" muted autoplay loop playsinline></video>
+      <img v-else class="p2-img" :src="previewUrl" alt="所拍花图" />
     </div>
 
     <!-- 下屏半屏卡片 -->
@@ -36,6 +37,22 @@
           <p class="p2-confidence text-caption ink-tertiary">
             识别置信度 {{ percentNumber(result.confidence) }}%
           </p>
+
+          <!-- 广义的花：视频主体属性 + 相似理由（flower_resemble.md §3.3；拍照识别不渲染） -->
+          <section v-if="result.resemble" class="p2-section p2-resemble">
+            <h3 class="p2-section-title text-title">✨ 它为什么像 {{ result.species }}</h3>
+            <p class="p2-resemble-subject text-body">
+              视频里的「{{ result.resemble.subject }}」
+            </p>
+            <div class="p2-chips">
+              <span class="chip">形态 · {{ result.resemble.shape }}</span>
+              <span class="chip">颜色 · {{ result.resemble.color }}</span>
+              <span class="chip">质感 · {{ result.resemble.texture }}</span>
+            </div>
+            <p v-if="result.resemble.reason" class="p2-resemble-reason text-body">
+              {{ result.resemble.reason }}
+            </p>
+          </section>
 
           <!-- 科普正文（ark 模式异步补齐，空则显示生成中并轮询） -->
           <p class="p2-science text-body" :class="{ 'ink-tertiary': !scienceText }">
@@ -112,6 +129,7 @@ import { buildCareTips } from '../../utils/careTips'
 
 const props = defineProps({
   previewUrl: { type: String, required: true },
+  isVideo: { type: Boolean, default: false },
   result: { type: Object, required: true }
 })
 
@@ -326,6 +344,22 @@ async function doPlant() {
 .p2-science {
   margin-top: 12px;
   color: var(--ink-primary);
+}
+
+/* 广义的花：相似理由区 */
+.p2-resemble .p2-chips {
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.p2-resemble-subject {
+  font-weight: 700;
+  color: var(--ink-primary);
+}
+
+.p2-resemble-reason {
+  margin-top: 10px;
+  color: var(--ink-secondary);
 }
 
 .p2-section {

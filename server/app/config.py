@@ -78,6 +78,9 @@ BADGE_MESSAGE = "花园有新的变化，去看看吧"
 # ---- 上传约束与静态目录 ----
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024  # 10MB
 ALLOWED_IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png"}
+# 广义的花：视频上传（flower_resemble.md §2）
+MAX_VIDEO_UPLOAD_BYTES = 30 * 1024 * 1024  # 30MB
+ALLOWED_VIDEO_SUFFIXES = {".mp4", ".mov", ".webm"}
 
 ASSETS_DIR = Path(__file__).resolve().parent / "assets"
 UPLOADS_DIR = ASSETS_DIR / "uploads"

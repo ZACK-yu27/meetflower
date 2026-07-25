@@ -35,8 +35,9 @@ def test_http_smoke(client):
     rec = resp.json()
     assert set(rec) == {
         "recognition_id", "image_url", "species", "main_color", "secondary_color",
-        "confidence", "science_text", "flower_image", "stage_images",
+        "confidence", "science_text", "flower_image", "stage_images", "resemble",
     }
+    assert rec["resemble"] is None  # 拍照识别无相似属性
     # 静态图 URL 可访问
     assert client.get(rec["image_url"]).status_code == 200
     assert client.get(rec["flower_image"]).status_code == 200
@@ -227,3 +228,54 @@ def test_http_errors(client):
     resp = client.post("/api/v1/recognitions", files={"image": ("a.gif", b"GIF89a", "image/gif")})
     assert resp.status_code == 422
     assert resp.json() == {"detail": "仅支持 jpg/png 格式的图片"}
+
+
+def test_resemble_video_mock(client):
+    """广义的花（mock 路径，离线确定性）：视频端点 → resemble 属性 → 种入花园。"""
+    video_bytes = b"FAKE-MP4-" + bytes(range(256)) * 8  # mock 只按字节哈希，不真正解码
+    resp = client.post(
+        "/api/v1/recognitions/video",
+        files={"video": ("clip.mp4", video_bytes, "video/mp4")},
+    )
+    assert resp.status_code == 200
+    rec = resp.json()
+    # resemble 属性齐全（flower_resemble.md §3.1 四字段 + reason）
+    attrs = rec["resemble"]
+    assert attrs and all(attrs[k] for k in ("subject", "shape", "color", "texture", "reason"))
+    assert rec["science_text"]  # mock 科普同步生成
+    assert rec["image_url"] == ""  # mock 无封面帧
+    assert client.get(rec["stage_images"]["bloom"]).status_code == 200
+
+    # 轮询端点回读同一记录：resemble 持久化
+    resp = client.get(f"/api/v1/recognitions/{rec['recognition_id']}")
+    assert resp.status_code == 200 and resp.json()["resemble"] == attrs
+
+    # 与拍照识别同一后续流程：可种入花园
+    resp = client.post("/api/v1/gardens/1/plants", json={"recognition_id": rec["recognition_id"]})
+    assert resp.status_code == 200
+    plant = resp.json()
+    assert plant["species"] == rec["species"] and plant["main_color"] == rec["main_color"]
+
+    # 同一视频字节 → 确定性同一品种（mock 哈希）
+    resp2 = client.post(
+        "/api/v1/recognitions/video",
+        files={"video": ("clip.mp4", video_bytes, "video/mp4")},
+    )
+    assert resp2.json()["species"] == rec["species"]
+
+
+def test_resemble_video_rejects_bad_input(client):
+    """非法视频：格式 422；空内容 422。"""
+    resp = client.post(
+        "/api/v1/recognitions/video",
+        files={"video": ("a.txt", b"hello", "text/plain")},
+    )
+    assert resp.status_code == 422
+    assert resp.json() == {"detail": "仅支持 mp4/mov/webm 格式的视频"}
+
+    resp = client.post(
+        "/api/v1/recognitions/video",
+        files={"video": ("a.mp4", b"", "video/mp4")},
+    )
+    assert resp.status_code == 422
+    assert resp.json() == {"detail": "视频内容为空"}

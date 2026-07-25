@@ -37,6 +37,7 @@ class RecognitionOut(BaseModel):
     science_text: str
     flower_image: str
     stage_images: dict[str, str]
+    resemble: dict | None = None  # 广义的花：视频主体属性+相似理由；拍照识别为 null
 
 
 # ---- 1.2 种植 / 复种、1.3 花园聚合 ----

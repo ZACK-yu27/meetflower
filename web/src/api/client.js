@@ -34,6 +34,13 @@ export function recognize(imageFile) {
   return client.post('/api/v1/recognitions', form, { timeout: 60000 }).then((r) => r.data)
 }
 
+// 1.1c 广义的花（multipart 上传视频；抽帧+两段式识别约 30–90s，超时放宽到 150s）
+export function recognizeVideo(videoFile) {
+  const form = new FormData()
+  form.append('video', videoFile)
+  return client.post('/api/v1/recognitions/video', form, { timeout: 150000 }).then((r) => r.data)
+}
+
 // 1.1b 识花结果轮询（ark 模式科普文案异步补齐，science_text 非空即就绪）
 export function getRecognition(recognitionId) {
   return client.get(`/api/v1/recognitions/${recognitionId}`).then((r) => r.data)

@@ -42,6 +42,7 @@ class Recognition(Base):
     secondary_color: Mapped[str]
     confidence: Mapped[float]
     form: Mapped[str | None] = mapped_column(default=None)  # 花型（catalog.FORMS）；旧行 NULL 回落图鉴/rosette
+    resemble_attrs: Mapped[dict | None] = mapped_column(JSON, default=None)  # 广义的花：视频主体属性+相似理由；拍照识别为 NULL
     science_text: Mapped[str] = mapped_column(Text)
     stage_images: Mapped[dict] = mapped_column(JSON)  # {stage: /api/v1/art/stage/...}
     flower_image: Mapped[str]

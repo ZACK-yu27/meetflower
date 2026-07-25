@@ -15,8 +15,17 @@
       <span class="p0-upload-sub">或从相册上传</span>
     </div>
 
+    <!-- 广义的花：视频识花入口（flower_resemble.md） -->
+    <div class="p0-upload-card p0-video-card" role="button" tabindex="0" @click="pickVideo" @keydown.enter="pickVideo">
+      <span class="p0-plus">
+        <ResIcon name="plus" :size="30" />
+      </span>
+      <span class="p0-upload-title">视频识花</span>
+      <span class="p0-upload-sub">烟花、猫爪开花…刷刷"广义的花"</span>
+    </div>
+
     <!-- 约束 Caption -->
-    <p class="p0-caption text-caption">JPEG/PNG，≤10MB</p>
+    <p class="p0-caption text-caption">图片 JPEG/PNG ≤10MB · 视频 MP4/MOV/WebM ≤30MB</p>
 
     <input
       ref="fileInput"
@@ -24,6 +33,13 @@
       accept="image/jpeg,image/png"
       hidden
       @change="onFileChange"
+    />
+    <input
+      ref="videoInput"
+      type="file"
+      accept="video/mp4,video/quicktime,video/webm"
+      hidden
+      @change="onVideoChange"
     />
   </div>
 </template>
@@ -40,9 +56,14 @@ const recognize = useRecognizeStore()
 const toast = useToastStore()
 
 const fileInput = ref(null)
+const videoInput = ref(null)
 
 function pickImage() {
   fileInput.value.click()
+}
+
+function pickVideo() {
+  videoInput.value.click()
 }
 
 function onFileChange(e) {
@@ -59,6 +80,22 @@ function onFileChange(e) {
     return
   }
   // 选定图片后立即进入 P1
+  recognize.startSession(file)
+  router.push('/recognize')
+}
+
+function onVideoChange(e) {
+  const file = e.target.files[0]
+  e.target.value = ''
+  if (!file) return
+  if (!file.type.startsWith('video/')) {
+    toast.error('只支持 MP4/MOV/WebM 视频，换一个试试')
+    return
+  }
+  if (file.size > 30 * 1024 * 1024) {
+    toast.error('视频不能超过 30MB，换一个试试')
+    return
+  }
   recognize.startSession(file)
   router.push('/recognize')
 }
@@ -109,6 +146,13 @@ function onClose() {
 
 .p0-upload-card:active {
   background: rgba(255, 255, 255, 0.06);
+}
+
+.p0-video-card {
+  margin-top: 14px;
+  padding: 24px 24px;
+  border-style: solid;
+  border-color: rgba(255, 255, 255, 0.25);
 }
 
 .p0-plus {

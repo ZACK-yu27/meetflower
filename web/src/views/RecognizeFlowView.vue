@@ -1,9 +1,10 @@
 <template>
   <!-- 识图流程编排：P1 分析流程 → P2 AI 科普页（组件状态机驱动） -->
-  <AnalyzeStage v-if="phase === 'analyze' && session.previewUrl" :preview-url="session.previewUrl" @cancel="onCancel" />
+  <AnalyzeStage v-if="phase === 'analyze' && session.previewUrl" :preview-url="session.previewUrl" :is-video="isVideo" @cancel="onCancel" />
   <ResultSheet
     v-else-if="phase === 'result' && session.result"
     :preview-url="session.previewUrl"
+    :is-video="isVideo"
     :result="session.result"
     @close="onClose"
     @planted="onPlanted"
@@ -11,11 +12,11 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import AnalyzeStage from '../components/recognize/AnalyzeStage.vue'
 import ResultSheet from '../components/recognize/ResultSheet.vue'
-import { recognize, errorMessage } from '../api/client'
+import { recognize, recognizeVideo, errorMessage } from '../api/client'
 import { useRecognizeStore } from '../stores/recognize'
 import { useToastStore } from '../stores/toast'
 
@@ -29,6 +30,9 @@ const MIN_ANIMATION_MS = 2000
 const phase = ref('analyze')
 let cancelled = false
 
+// 广义的花：视频走 /recognitions/video（flower_resemble.md）
+const isVideo = computed(() => Boolean(session.file?.type?.startsWith('video/')))
+
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
 onMounted(async () => {
@@ -39,7 +43,8 @@ onMounted(async () => {
   }
   // 上传请求在动画开始时即发出；接口返回 + 动画保底后进入 P2
   try {
-    const [result] = await Promise.all([recognize(session.file), delay(MIN_ANIMATION_MS)])
+    const request = isVideo.value ? recognizeVideo(session.file) : recognize(session.file)
+    const [result] = await Promise.all([request, delay(MIN_ANIMATION_MS)])
     if (cancelled) return
     session.setResult(result)
     phase.value = 'result'

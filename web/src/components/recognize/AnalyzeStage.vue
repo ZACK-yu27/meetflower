@@ -1,8 +1,9 @@
 <template>
   <!-- P1 识图分析流程（全屏，按参考图复刻：扫描 → 框选 → 卡片上滑） -->
   <div class="p1-page">
-    <!-- 所拍图片全屏铺满 + 压暗（黑 40%） -->
-    <img class="p1-img" :src="previewUrl" alt="识别中的图片" />
+    <!-- 所拍图片全屏铺满 + 压暗（黑 40%）；视频入口为静音循环预览 -->
+    <video v-if="isVideo" class="p1-img" :src="previewUrl" muted autoplay loop playsinline></video>
+    <img v-else class="p1-img" :src="previewUrl" alt="识别中的图片" />
     <div class="p1-dim"></div>
 
     <!-- 白色扫描光点：随机位置浮动闪烁，持续循环 -->
@@ -30,7 +31,8 @@
     </div>
 
     <!-- 状态二：左上识别帧缩略图淡入（56px） -->
-    <img v-if="stage !== 'scan'" class="p1-thumb" :src="previewUrl" alt="识别帧" />
+    <video v-if="isVideo && stage !== 'scan'" class="p1-thumb" :src="previewUrl" muted autoplay loop playsinline></video>
+    <img v-else-if="stage !== 'scan'" class="p1-thumb" :src="previewUrl" alt="识别帧" />
 
     <!-- 状态三：底部半屏卡片上滑（300ms），「AI 正在生成回答 …」+ 骨架条 -->
     <div class="p1-sheet" :class="{ up: stage === 'card' }">
@@ -53,7 +55,8 @@ import { ref, onMounted, onUnmounted } from 'vue'
 import SkeletonLines from '../SkeletonLines.vue'
 
 defineProps({
-  previewUrl: { type: String, required: true }
+  previewUrl: { type: String, required: true },
+  isVideo: { type: Boolean, default: false }
 })
 
 defineEmits(['cancel'])

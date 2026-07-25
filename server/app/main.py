@@ -33,7 +33,7 @@ def _ensure_columns() -> None:
     from sqlalchemy import inspect, text
 
     wanted = {
-        "recognitions": {"form": "VARCHAR"},
+        "recognitions": {"form": "VARCHAR", "resemble_attrs": "JSON"},
         "plants": {"form": "VARCHAR"},
         "house_items": {"form": "VARCHAR"},
     }

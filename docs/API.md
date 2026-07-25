@@ -26,9 +26,17 @@
 
 ### 1.1 识花 `POST /api/v1/recognitions`
 - 请求：`multipart/form-data`，字段 `image`（jpg/png，≤10MB）。
-- 响应 200：`{ recognition_id, image_url, species, main_color, secondary_color, confidence, science_text, flower_image, stage_images: {seed, sprout, seedling, bud, bloom} }`。
+- 响应 200：`{ recognition_id, image_url, species, main_color, secondary_color, confidence, science_text, flower_image, stage_images: {seed, sprout, seedling, bud, bloom}, resemble: null }`。
 - **科普文案异步补齐**（ark 模式）：首响只做 VLM 识别 + 资产生成，`science_text` 为 `""`；科普由后台任务撰写（约 15–20s）并回写，前端经 `GET /api/v1/recognitions/{id}` 轮询（建议 2s 间隔），`science_text` 非空即就绪。mock 模式科普瞬时生成、同步返回。
 - 识花结果查询 `GET /api/v1/recognitions/{id}`：响应同 POST；未知 id 404「识花记录不存在」。
+
+### 1.1c 广义的"花"（视频识花） `POST /api/v1/recognitions/video`（v0.4 新增）
+- 规则文档：`docs/flower_resemble.md`（两段式：VLM 抽视频主体属性 → LLM 检索最相似花卉）。
+- 请求：`multipart/form-data`，字段 `video`（mp4/mov/webm，≤30MB）。抽帧规则：每 3 秒 1 帧、最多 8 帧、宽 512px JPEG（首帧入库作封面 `image_url`；mock 路径无封面、为空串）。
+- 响应 200：schema 同 1.1，其中 `resemble` 非空：`{ subject, shape, color, texture, reason }`（视频主体形态/颜色/质感 + 相似理由；拍照识别该字段为 `null`，前端不渲染）。
+- 422：「仅支持 mp4/mov/webm 格式的视频」「视频内容为空」「视频大小不能超过 30MB」「视频无法解析，换一个试试」。
+- 后续流程与 1.1 完全一致：同一 Recognition 表、同一种植/轮询/科普异步补齐。
+
 
 ### 1.2 种植 / 复种 `POST /api/v1/gardens/1/plants`
 - 请求（二选一）：
