@@ -1,7 +1,13 @@
 """1.1 识花：POST /api/v1/recognitions（multipart/form-data，字段 image，jpg/png ≤10MB）；
 POST /api/v1/recognitions/video（广义的"花"，字段 video，mp4/mov/webm ≤30MB，规则见 docs/flower_resemble.md）；
-GET /api/v1/recognitions/{id}（轮询：ark 模式科普文案异步补齐后 science_text 非空）。"""
+GET /api/v1/recognitions/{id}（轮询：ark 模式科普文案异步补齐后 science_text 非空）。
 
+⚠️ 服务层是同步阻塞代码（模型调用/ffmpeg 子进程，30-90s），
+必须用 asyncio.to_thread 卸载——否则单进程事件循环被冻结，
+健康检查 /healthz 超时，Render 会误判实例故障并重启（2026-07-26 生产事故）。
+"""
+
+import asyncio
 from pathlib import Path
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile
@@ -42,7 +48,9 @@ async def create_recognition(
     if len(data) > config.MAX_UPLOAD_BYTES:
         raise HTTPException(status_code=422, detail="图片大小不能超过 10MB")
 
-    return recognition_service.create_recognition(db, garden_id, data, suffix, background)
+    return await asyncio.to_thread(
+        recognition_service.create_recognition, db, garden_id, data, suffix, background
+    )
 
 
 @router.get("/recognitions/{recognition_id}", response_model=RecognitionOut)
@@ -72,6 +80,8 @@ async def create_resemble_recognition(
         raise HTTPException(status_code=422, detail="视频大小不能超过 30MB")
 
     try:
-        return recognition_service.create_resemble_recognition(db, garden_id, data, suffix, background)
+        return await asyncio.to_thread(
+            recognition_service.create_resemble_recognition, db, garden_id, data, suffix, background
+        )
     except VideoFrameError:
         raise HTTPException(status_code=422, detail="视频无法解析，换一个试试") from None
