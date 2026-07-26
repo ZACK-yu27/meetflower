@@ -35,10 +35,11 @@ def create_order(
 
     material = list(bouquet.items_json)
     chargeable = [m for m in material if not m.get("gifted")]  # 赠送花材不扣减
+    garden_id = bouquet.garden_id or config.GARDEN_ID  # 按花束所属花园扣减（多会话隔离）
 
     # 单事务：每种非赠送花材扣 1 次使用次数 + bouquet→sent + 创建订单（落 note/accept_substitute）
     for it in chargeable:
-        item = _stock(session, config.GARDEN_ID, it["species"], it["color"])
+        item = _stock(session, garden_id, it["species"], it["color"])
         if item is not None:
             item.quantity = max(0, item.quantity - 1)
     bouquet.status = "sent"
