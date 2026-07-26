@@ -42,9 +42,14 @@ const litCount = ref(0)
 const finished = ref(false)
 let timer = null
 
-// 由当前阶段图 URL 推导五阶段图（同目录同命名规范，仅替换阶段后缀）
+// 由当前阶段图 URL 推导五阶段图（同目录同命名规范，仅替换阶段段）
 function stageUrl(stageKey) {
   const url = props.plant?.stage_image || ''
+  // 现行格式：/api/v1/art/stage/{品种}/{颜色}/[{花型}/]{stage}.png —— 阶段是路径段
+  if (/\/(seed|sprout|seedling|bud|bloom)\.png$/.test(url)) {
+    return url.replace(/\/(seed|sprout|seedling|bud|bloom)\.png$/, `/${stageKey}.png`)
+  }
+  // 历史下划线后缀格式兜底
   if (/_stage_|_(seed|sprout|seedling|bud|bloom)\.png$/.test(url)) {
     return url.replace(/_(seed|sprout|seedling|bud|bloom)\.png$/, `_${stageKey}.png`)
   }
