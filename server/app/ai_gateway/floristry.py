@@ -68,7 +68,8 @@ def select_items(occasion: str, available: list[dict]) -> tuple[list[dict], dict
     再选不与 items 重复的 bonus_flower（默认优先满天星）。
 
     available = [{species, color, quantity}]（已过滤 quantity>0）。
-    返回 (items, bonus_flower)：items 主/辅约 7:3，count 不超库存（库存是"使用次数"）。
+    返回 (items, bonus_flower)：朵数为配方固定（主 3 / 辅 1，主/辅约 7:3）——
+    库存 quantity 是"使用次数"而非朵数，1 个库存可支持若干朵，朵数不与库存比较。
     """
     pref_species, pref_families = OCCASION_PREFS.get(occasion, ([], []))
     ranked = sorted(
@@ -79,7 +80,7 @@ def select_items(occasion: str, available: list[dict]) -> tuple[list[dict], dict
     items: list[dict] = []
     if ranked:
         main = ranked[0]
-        main_count = min(3, main["quantity"])
+        main_count = 3
         items.append({"species": main["species"], "color": main["color"], "count": main_count})
         # 辅花：色彩协调（同色/邻近色，避免两种大花并列）且非同一品种+颜色
         for cand in ranked[1:]:
@@ -87,8 +88,8 @@ def select_items(occasion: str, available: list[dict]) -> tuple[list[dict], dict
                 continue
             if not colors_harmonious(main["color"], cand["color"]):
                 continue
-            sub_count = min(cand["quantity"], max(1, round(main_count * 3 / 7)))  # 主/辅约 7:3
-            items.append({"species": cand["species"], "color": cand["color"], "count": sub_count})
+            items.append({"species": cand["species"], "color": cand["color"],
+                          "count": max(1, round(main_count * 3 / 7))})  # 主/辅约 7:3
             break
 
     taken = {(i["species"], i["color"]) for i in items}

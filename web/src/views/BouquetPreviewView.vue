@@ -118,7 +118,7 @@ const totalCount = computed(
   () => preview.value?.material_list?.reduce((s, m) => s + m.count, 0) ?? 0
 )
 
-// 生成失败（含库存不足 409）：toast 展示 detail 并回 P4
+// 生成失败：toast 展示 detail 并回 P4
 watch(
   () => bouquet.error,
   (err) => {
@@ -156,7 +156,7 @@ async function doSend() {
     })
     router.push('/shop')
   } catch (err) {
-    // 库存不足 / 重复提交 409：toast 展示 detail 并回 P4
+    // 重复提交 409：toast 展示 detail 并回 P4
     toast.error(errorMessage(err, '发送失败，请重试'))
     router.replace('/house')
   } finally {

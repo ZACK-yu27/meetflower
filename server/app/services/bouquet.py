@@ -1,7 +1,10 @@
-"""花束服务：AI 推荐搭配（1.13）+ 预览（1.7：库存快照校验、赠送花材不校验、搭配说明/包装建议/轻量建议）。
+"""花束服务：AI 推荐搭配（1.13）+ 预览（1.7：赠送花材标 gifted、搭配说明/包装建议/轻量建议）。
 
 预览首响优化（ark 模式）：搭配说明与包装建议并行调用（无依赖）；预览图异步生成回写，
 首响 preview_url 为 null，前端经 GET /api/v1/bouquets/{id} 轮询。mock 模式全部同步。
+
+库存语义（2026-07-26 起）：house_items.quantity 是"使用次数"而非朵数；
+预览/推荐不做朵数-库存比较，下单时每种非赠送花材扣 1 次使用次数（见 order.py）。
 """
 
 import logging
@@ -53,17 +56,6 @@ def _aggregate(items: list[BouquetItemIn], gifted: bool) -> list[dict]:
         for m in material:
             m["gifted"] = True
     return material
-
-
-def check_stock(session: Session, garden_id: int, items: list[dict]) -> None:
-    """库存校验（调用方负责跳过 gifted 项），不足抛 409（消息格式见 API.md 1.7）。"""
-    for it in items:
-        item = _stock(session, garden_id, it["species"], it["color"])
-        have = item.quantity if item is not None else 0
-        if it["count"] > have:
-            raise DomainError(
-                409, f"{it['species']}({it['color']}) 库存不足：需要 {it['count']}，现有 {have}"
-            )
 
 
 def _texts_parallel(material: list[dict], occasion: str | None) -> tuple[str, str]:
@@ -143,8 +135,6 @@ def preview(
     normal = _aggregate(items, gifted=False)
     gifted = _aggregate([bonus], gifted=True) if bonus is not None else []
     material = normal + gifted
-
-    check_stock(session, garden_id, normal)  # 快照校验不扣减；bonus 不校验
 
     bouquet = Bouquet(garden_id=garden_id, items_json=material, occasion=occasion, status="draft")
     session.add(bouquet)

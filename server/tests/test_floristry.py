@@ -21,14 +21,14 @@ def test_select_items_main_hits_occasion_preference():
     assert (items[0]["species"], items[0]["color"]) == ("玫瑰", "红")
 
 
-def test_select_items_count_and_inventory_bounds():
-    """items 1–2 种、count ≤ 库存、主/辅约 7:3、主辅不同品种色。"""
-    available = _stock(("玫瑰", "红", 3), ("洋甘菊", "白", 2))
+def test_select_items_recipe_counts():
+    """朵数为配方固定（主 3 / 辅 1，约 7:3），与库存使用次数无关；主辅不同品种色。"""
+    available = _stock(("玫瑰", "红", 1), ("洋甘菊", "白", 1))  # 库存仅 1 次也不影响朵数
     items, _ = floristry.select_items("情侣约会", available)
     assert 1 <= len(items) <= 2
-    stock = {(s, c): q for s, c, q in [("玫瑰", "红", 3), ("洋甘菊", "白", 2)]}
-    for it in items:
-        assert it["count"] <= stock[(it["species"], it["color"])]
+    assert items[0]["count"] == 3
+    if len(items) == 2:
+        assert items[1]["count"] == 1
     assert len({(i["species"], i["color"]) for i in items}) == len(items)
 
 

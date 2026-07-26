@@ -126,4 +126,7 @@ cd web && npm run build
 - 要点：赠送花材默认满天星·白、不占库存、gifted 标记必须经 `_gen_items()` 传入 BouquetItem；
   编排配方 1 种=半球形 / 主+辅=圆三角 / 含赠送=扇形三角；包装色 PACKAGING_COLORS 查主色；
   Pillow 降级合成时主花居视觉中心。
+- **库存语义（2026-07-26 二轮）**：`house_items.quantity` 是使用次数而非朵数——朵数-库存比较已全部删除
+  （check_stock 已删，预览/推荐不再 409）；推荐朵数配方固定（主 3 / 辅 1）；
+  下单每种非赠送花材扣 1 次（保底 0）；前端自由搭配步进器改为勾选（选中即 1 种）。
 - 验收：pytest 全绿（tests/test_floristry.py 常驻断言选品/配比/赠送/模板长度/提示词要素）。

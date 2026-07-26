@@ -337,16 +337,17 @@ def test_press_flow_and_gray_zero_item(session):
 
 # ---------- 1.7 预览：库存校验 / 赠送花材 / 不扣库存 ----------
 
-def test_preview_insufficient_stock_409(session):
-    # 预置花材含玫瑰·红×2（启动播种）
-    with pytest.raises(DomainError) as exc_info:
-        bouquet_service.preview(
-            session, config.GARDEN_ID, [BouquetItemIn(species="玫瑰", color="红", count=3)]
-        )
-    assert exc_info.value.status_code == 409
-    assert exc_info.value.detail == "玫瑰(红) 库存不足：需要 3，现有 2"
-    assert session.scalars(select(Bouquet)).all() == []  # 校验失败不落方案
-    assert session.scalars(select(Order)).all() == []
+def test_preview_no_stock_filter(session):
+    """库存语义改为使用次数：朵数不做库存校验，预览不再 409、不落校验错误。"""
+    # 预置花材含玫瑰·红×2（启动播种）；count=3 超出旧逻辑库存也照常生成
+    bouquet = bouquet_service.preview(
+        session, config.GARDEN_ID, [BouquetItemIn(species="玫瑰", color="红", count=3)]
+    )
+    assert bouquet.status == "draft"
+    assert bouquet.material_list == [{"species": "玫瑰", "color": "红", "count": 3}]
+    # 预览不扣库存
+    house = {i.species: i.quantity for i in house_service.list_items(session, config.GARDEN_ID).items}
+    assert house["玫瑰"] == 2
 
 
 def test_preview_with_bonus_and_suggestion(session):
@@ -377,27 +378,27 @@ def test_preview_with_bonus_and_suggestion(session):
     assert house["玫瑰"] == 2 and house["洋甘菊"] == 2
 
 
-def test_preview_unknown_species_409(session):
-    """品种/颜色不限于图鉴：图鉴外花材进入预览后按库存校验，无库存即 409。"""
-    with pytest.raises(DomainError) as exc_info:
-        bouquet_service.preview(
-            session, config.GARDEN_ID, [BouquetItemIn(species="绣球", color="蓝", count=1)]
-        )
-    assert exc_info.value.status_code == 409  # 库存不足（绣球无库存）
+def test_preview_off_catalog_species_ok(session):
+    """品种/颜色不限于图鉴，且无库存校验：图鉴外/无库存花材也可进入预览。"""
+    bouquet = bouquet_service.preview(
+        session, config.GARDEN_ID, [BouquetItemIn(species="绣球", color="蓝", count=1)]
+    )
+    assert bouquet.status == "draft"
+    assert bouquet.material_list[0]["species"] == "绣球"
 
 
 # ---------- 1.13 AI 推荐搭配 ----------
 
 def test_recommend_by_occasion(session):
-    """意图 → 库存组合 + 1 种赠送花材；赠送与 items 不重复。"""
-    # 预置库存：玫瑰红×2、洋甘菊白×2、向日葵黄×1
+    """意图 → 库存组合 + 1 种赠送花材；朵数为配方固定（主 3 / 辅 1），赠送与 items 不重复。"""
+    # 预置库存：玫瑰红×2、洋甘菊白×2、向日葵黄×1（数量为使用次数，不影响朵数）
     out = bouquet_service.recommend(session, config.GARDEN_ID, "情侣约会")
     assert out.occasion == "情侣约会"
     assert 1 <= len(out.items) <= 2  # 从当前库存选 1–2 种
-    stock = {("玫瑰", "红"): 2, ("洋甘菊", "白"): 2, ("向日葵", "黄"): 1}
-    for item in out.items:
-        key = (item.species, item.color)
-        assert key in stock and 1 <= item.count <= stock[key]
+    stock = {("玫瑰", "红"), ("洋甘菊", "白"), ("向日葵", "黄")}
+    for i, item in enumerate(out.items):
+        assert (item.species, item.color) in stock
+        assert item.count == (3 if i == 0 else 1)  # 配方固定：主 3 / 辅 1
     bonus = out.bonus_flower
     assert bonus.gifted is True and bonus.count == 1
     assert (bonus.species, bonus.color) not in {(i.species, i.color) for i in out.items}
@@ -479,6 +480,25 @@ def test_order_defaults_and_lazy_advance(session):
     orders = order_service.list_orders(session)
     assert [o.order_id for o in orders.orders] == [order.order_id]
     assert orders.orders[0].status == "done"
+
+
+def test_order_deducts_one_use_per_material(session):
+    """下单每种非赠送花材只扣 1 次使用次数（与朵数无关，保底 0）。"""
+    # 预置玫瑰·红×2；count=3 也只扣 1 次
+    bouquet = bouquet_service.preview(
+        session, config.GARDEN_ID, [BouquetItemIn(species="玫瑰", color="红", count=3)]
+    )
+    order_service.create_order(session, bouquet.bouquet_id)
+    house = {i.species: i.quantity for i in house_service.list_items(session, config.GARDEN_ID).items}
+    assert house["玫瑰"] == 1
+
+    # 无库存记录的花材跳过扣减、不报错
+    bouquet2 = bouquet_service.preview(
+        session, config.GARDEN_ID, [BouquetItemIn(species="绣球", color="蓝", count=2)]
+    )
+    order_service.create_order(session, bouquet2.bouquet_id)
+    house2 = {i.species: i.quantity for i in house_service.list_items(session, config.GARDEN_ID).items}
+    assert "绣球" not in house2
 
 
 def test_order_not_found_404(session):

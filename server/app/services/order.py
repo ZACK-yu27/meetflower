@@ -1,4 +1,8 @@
-"""订单服务：发送花店（单事务扣库存[跳过赠送项] + 方案置 sent + 创建订单落备注/替代）+ 惰性状态推进。"""
+"""订单服务：发送花店（单事务扣库存[每种非赠送花材扣 1 次使用次数] + 方案置 sent + 创建订单落备注/替代）+ 惰性状态推进。
+
+库存语义：house_items.quantity 是"使用次数"而非朵数——不做朵数-库存校验，
+每种非赠送花材每单扣 1 次（保底 0）；赠送花材不扣减。无库存记录的花材跳过扣减。
+"""
 
 from datetime import datetime
 
@@ -14,7 +18,7 @@ from ..schemas import (
     TimelineItem,
 )
 from . import DomainError
-from .bouquet import _stock, check_stock
+from .bouquet import _stock
 
 
 def create_order(
@@ -30,13 +34,13 @@ def create_order(
         raise DomainError(409, "该花束方案已下单，请勿重复提交")
 
     material = list(bouquet.items_json)
-    chargeable = [m for m in material if not m.get("gifted")]  # 赠送花材不校验、不扣减
-    check_stock(session, config.GARDEN_ID, chargeable)
+    chargeable = [m for m in material if not m.get("gifted")]  # 赠送花材不扣减
 
-    # 单事务：扣库存 + bouquet→sent + 创建订单（落 note/accept_substitute）
+    # 单事务：每种非赠送花材扣 1 次使用次数 + bouquet→sent + 创建订单（落 note/accept_substitute）
     for it in chargeable:
         item = _stock(session, config.GARDEN_ID, it["species"], it["color"])
-        item.quantity -= it["count"]
+        if item is not None:
+            item.quantity = max(0, item.quantity - 1)
     bouquet.status = "sent"
     now = datetime.now()
     order = Order(

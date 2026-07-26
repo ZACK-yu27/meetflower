@@ -24,11 +24,24 @@
 
         <!-- 库存双列网格 -->
         <div v-else class="p4-grid">
-          <div v-for="item in items" :key="item.item_id" class="grid-cell" :class="{ 'is-zero': item.quantity === 0 }">
-            <div class="cell-img-wrap">
+          <div
+            v-for="item in items"
+            :key="item.item_id"
+            class="grid-cell"
+            :class="{ 'is-zero': item.quantity === 0, picked: picking && isPicked(item) }"
+          >
+            <div
+              class="cell-img-wrap"
+              :class="{ 'pickable': picking && item.quantity > 0 }"
+              @click="picking && item.quantity > 0 && toggle(item)"
+            >
               <img class="cell-img" :src="item.flower_image" :alt="item.species" loading="lazy" />
               <!-- 数量角标：badge-pink 粉底白字胶囊（×0 灰卡角标「x0」） -->
               <span class="cell-badge">x{{ item.quantity }}</span>
+              <!-- 自由搭配勾选圈（选中即 1 种花材，不再选数量） -->
+              <span v-if="picking && item.quantity > 0" class="pick-check" :class="{ on: isPicked(item) }">
+                <ResIcon v-if="isPicked(item)" name="check" :size="12" />
+              </span>
             </div>
             <p class="text-caption ink-secondary cell-name">{{ item.species }} · {{ item.color }}</p>
 
@@ -41,29 +54,13 @@
             >
               {{ replantingId === item.item_id ? '种下中…' : '重新种植' }}
             </button>
-
-            <!-- 自由搭配多选态：步进器（0–库存上限） -->
-            <div v-else-if="picking" class="stepper">
-              <button class="stepper-btn" :disabled="countOf(item) <= 0" aria-label="减少" @click="change(item, -1)">
-                <ResIcon name="minus" :size="16" />
-              </button>
-              <span class="stepper-num text-body">{{ countOf(item) }}</span>
-              <button
-                class="stepper-btn"
-                :disabled="countOf(item) >= item.quantity"
-                aria-label="增加"
-                @click="change(item, 1)"
-              >
-                <ResIcon name="plus" :size="16" />
-              </button>
-            </div>
           </div>
         </div>
       </div>
 
       <!-- 自由搭配底部操作栏（卡片内 footer） -->
       <div v-if="picking" class="pick-bar">
-        <span class="text-caption ink-secondary">已选 {{ totalSelected }} 朵</span>
+        <span class="text-caption ink-secondary">已选 {{ totalSelected }} 种</span>
         <button class="btn-cta pick-cta" :disabled="totalSelected === 0" @click="doPreviewFree">生成花束预览</button>
       </div>
     </div>
@@ -159,19 +156,24 @@ const entered = ref(false) // 上滑进入动画（300ms）
 const loading = ref(true)
 const items = ref([])
 
-// ---- 自由搭配多选态 ----
+// ---- 自由搭配多选态（勾选即选中 1 种花材，不再选数量） ----
 const picking = ref(false)
-const selections = ref({}) // { [item_id]: count }
+const selections = ref({}) // { [item_id]: true }
 
-const totalSelected = computed(() => Object.values(selections.value).reduce((s, n) => s + n, 0))
+const totalSelected = computed(() => Object.values(selections.value).filter(Boolean).length)
 
-function countOf(item) {
-  return selections.value[item.item_id] || 0
+function isPicked(item) {
+  return !!selections.value[item.item_id]
 }
 
-function change(item, delta) {
-  // 夹取在 0–库存 之间
-  selections.value[item.item_id] = Math.max(0, Math.min(item.quantity, countOf(item) + delta))
+function toggle(item) {
+  if (isPicked(item)) {
+    const next = { ...selections.value }
+    delete next[item.item_id]
+    selections.value = next
+  } else {
+    selections.value = { ...selections.value, [item.item_id]: true }
+  }
 }
 
 function enterFreePick() {
@@ -234,11 +236,11 @@ function doPreviewRecommend() {
   router.push('/bouquet/preview')
 }
 
-// 自由搭配「生成花束预览」：发起 1.7 并跳转 P5（生成中状态由 P5 展示；409 在 P5 toast 展示 detail）
+// 自由搭配「生成花束预览」：每种勾选花材按 1 种入束（数量为使用次数，朵数由规则/生图配方处理）
 function doPreviewFree() {
   const selected = items.value
-    .filter((item) => countOf(item) > 0)
-    .map((item) => ({ species: item.species, color: item.color, count: countOf(item) }))
+    .filter((item) => isPicked(item))
+    .map((item) => ({ species: item.species, color: item.color, count: 1 }))
   if (!selected.length) return
   bouquet.startPreview(selected)
   router.push('/bouquet/preview')
@@ -432,30 +434,34 @@ onMounted(async () => {
   width: 100%;
 }
 
-.stepper {
+/* 自由搭配：整卡可点 + 勾选圈 */
+.cell-img-wrap.pickable {
+  cursor: pointer;
+}
+
+.grid-cell.picked .cell-img {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.pick-check {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1.5px solid #fff;
+  background: rgba(0, 0, 0, 0.25);
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  color: #fff;
 }
 
-.stepper-btn {
-  width: 44px; /* §8 热区 ≥44 */
-  height: 44px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--ink-primary);
-}
-
-.stepper-btn:disabled {
-  color: var(--handle);
-}
-
-.stepper-num {
-  min-width: 24px;
-  text-align: center;
-  font-weight: 700;
+.pick-check.on {
+  background: var(--accent);
+  border-color: var(--accent);
 }
 
 /* ---- 自由搭配底部操作栏（卡片内 footer） ---- */

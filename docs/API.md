@@ -10,7 +10,8 @@
 - 前端：Vite dev server `http://localhost:5173`，代理 `/api` → `http://localhost:8000`；前端一律使用相对路径请求。
 - **多用户隔离（v0.3）**：前端在 localStorage 保存匿名 UUID，所有请求带 `X-Session-Id` 头；后端按 Session 映射独立花园（首次访问自动创建并播种，`GET /api/v1/me/garden` 返回当前会话花园）。未带头的请求回落到启动播种的默认花园 `garden_id = 1`。
 - 图片访问：上传原图与花束预览图存 Postgres `images` 表，经 `GET /api/v1/images/{id}` 读取；阶段图/花朵特写为确定性 Pillow 资产，经 `GET /api/v1/art/stage/{species}/{color}/{stage}.png` 与 `GET /api/v1/art/flower/{species}/{color}.png` 动态渲染（不落盘不入库）。
-- 错误响应统一：`{ "detail": "人类可读的中文错误信息" }`；库存/状态冲突 409，不存在 404，参数错误 422。
+- 错误响应统一：`{ "detail": "人类可读的中文错误信息" }`；状态冲突 409，不存在 404，参数错误 422。
+- **库存语义（v0.5，2026-07-26）**：`house_items.quantity` 是花材的**使用次数**而非朵数——1 个库存可支持使用若干朵鲜花。预览/推荐不做朵数-库存比较（前端自由搭配只勾选花材、不选数量）；下单时每种非赠送花材扣 1 次使用次数（保底 0），赠送花材不扣减；quantity=0 行保留为 ×0 灰态可复种。
 - Demo 固定：每个花园内 user_a「我」= me，user_b「小葵」= ta。`user` 字段取值仅 `"me" | "ta"`。
 - 成长阶段：`seed(种子) → sprout(萌芽) → seedling(幼苗) → bud(花苞) → bloom(盛放)`；`stage_order`：0–4。
 - **生长节律（GROWTH_RHYTHM，向日葵示例值，每阶段"每个人"所需资源，无缓冲期）**：
@@ -121,7 +122,7 @@
 }
 ```
 - `bonus`（可空）= 推荐链路赠送的花材（来自 1.13 的 bonus_flower）；`occasion`（可空）用于生成搭配说明与包装建议。
-- 处理：items 库存快照校验（不足 409「玫瑰(红) 库存不足：需要 3，现有 2」；bonus 不校验）→ 生图（bonus 参与合成）→ 保存方案（draft，items_json 中 bonus 项标 `gifted: true`）。**不扣减库存。**
+- 处理：生图（bonus 参与合成）→ 保存方案（draft，items_json 中 bonus 项标 `gifted: true`）。**不做朵数-库存校验、不扣减库存**（库存 quantity 是"使用次数"，1 个库存可支持若干朵，见 §0 库存语义）。
 - **预览图异步补齐**（ark 模式）：首响只并行生成搭配说明/包装建议（约 10–30s），`preview_url` 为 `null`；预览图由后台任务生成（Seedream 约 45–60s，超时自动降级 Pillow 合成）并回写，前端经 `GET /api/v1/bouquets/{id}` 轮询（建议 3s 间隔），`preview_url` 非空即就绪。mock 模式生图瞬时、同步返回。
 - 花束方案查询 `GET /api/v1/bouquets/{id}`：响应同 POST；未知 id 404「花束方案不存在」。
 - 响应 200：
@@ -143,7 +144,7 @@
 
 ### 1.8 发送花店 `POST /api/v1/bouquets/1/orders`
 - 请求：`{ "note": "请下午 5 点后送达", "accept_substitute": true }`（note 可空，accept_substitute 默认 true）
-- 处理（单事务）：校验库存（跳过 gifted 项）→ 扣减 → bouquet→sent → 创建订单（shop_name、status=accepted，落 note/accept_substitute）。已 sent 重复提交 409。
+- 处理（单事务）：每种**非赠送**花材扣 **1 次使用次数**（`quantity = max(0, quantity-1)`；无库存记录跳过；赠送项不扣减；**不做朵数-库存校验**）→ bouquet→sent → 创建订单（shop_name、status=accepted，落 note/accept_substitute）。已 sent 重复提交 409。
 - 响应 200：`{ "order_id": 1, "bouquet_id": 1, "status": "accepted", "shop_name": "春风花店·抖音本地生活（模拟）" }`
 
 ### 1.9 订单详情 `GET /api/v1/orders/1`

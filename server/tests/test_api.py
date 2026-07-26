@@ -161,7 +161,7 @@ def test_http_smoke(client):
     assert resp.json() == {"plant_id": replant["plant_id"], "stage": "bloom", "stage_name": "盛放"}
     resp = client.post(f"/api/v1/gardens/1/plants/{replant['plant_id']}/press", json={})
     assert resp.status_code == 200
-    assert resp.json()["quantity"] == 1  # 推荐已消耗预置玫瑰红×2 → 压花后灰态行 +1
+    assert resp.json()["quantity"] == 2  # 推荐链路下单玫瑰红只扣 1 次使用次数（2→1）→ 压花 +1
 
     # 1.6 花房（含 ×0 灰态项：向日葵×1 若被推荐消耗则为 0）
     resp = client.get("/api/v1/flower-house")
