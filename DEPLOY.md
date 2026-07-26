@@ -114,6 +114,8 @@ git push origin main
 | `ARK_BASE_URL` | `https://ark.cn-beijing.volces.com/api/v3` | |
 | `ARK_CHAT_MODEL` | `doubao-seed-2-0-lite-260215` | |
 | `ARK_IMAGE_MODEL` | `doubao-seedream-5-0-260128` | |
+| `ARK_VLM_MODEL` | 可选 | 拍照识花专用，缺省同 chat |
+| `ARK_VIDEO_MODEL` | 可选 | 视频识花（广义的花）属性抽取专用，缺省同 VLM；视频链路对速度敏感可换极速模型 |
 | `FLOWERS_DATABASE_URL` | `postgresql://...neon.tech/neondb?sslmode=require` | Neon 连接串（含密码，**勿提交到 git**），见 3.2a |
 | `PUBLIC_BASE_URL` | `https://<你的 Render 实际域名>` | 静态资源 URL 前缀，**必填**，见下方说明 |
 

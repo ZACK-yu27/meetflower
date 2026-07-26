@@ -156,7 +156,7 @@ def _extract_attrs(frames: list) -> dict:
     attrs = ark.chat_json(
         [{"role": "system", "content": _ATTR_SYSTEM}, {"role": "user", "content": content}],
         max_tokens=128,  # 属性 JSON 很短，限制输出长度降低延时
-        model=settings.ARK_VLM_MODEL,
+        model=settings.ARK_VIDEO_MODEL,  # 视频链路独立模型（settings.ARK_VIDEO_MODEL）
     )
     return {k: str(attrs.get(k, "")).strip() for k in RESEMBLE_ATTR_KEYS}
 

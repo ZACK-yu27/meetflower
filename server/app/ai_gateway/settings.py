@@ -28,6 +28,8 @@ ARK_BASE_URL = os.environ.get("ARK_BASE_URL", "https://ark.cn-beijing.volces.com
 ARK_CHAT_MODEL = os.environ.get("ARK_CHAT_MODEL", "doubao-seed-2-0-lite-260215")
 # VLM 识花专用模型（缺省跟随 chat；如需与科普文案分开可单独设 ARK_VLM_MODEL）
 ARK_VLM_MODEL = os.environ.get("ARK_VLM_MODEL") or ARK_CHAT_MODEL
+# 广义的花：视频属性抽取专用模型（缺省跟随 VLM；视频链路对速度更敏感，可单独换极速模型）
+ARK_VIDEO_MODEL = os.environ.get("ARK_VIDEO_MODEL") or ARK_VLM_MODEL
 ARK_IMAGE_MODEL = os.environ.get("ARK_IMAGE_MODEL", "doubao-seedream-5-0-260128")
 ARK_CHAT_TIMEOUT = float(os.environ.get("ARK_CHAT_TIMEOUT", "90"))
 ARK_IMAGE_TIMEOUT = float(os.environ.get("ARK_IMAGE_TIMEOUT", "120"))

@@ -250,7 +250,7 @@ ai_gateway 对外契约全部不变，内部按 `AI_PROVIDER` 双实现分发（
 | `generate_bouquet` | images/generations（Seedream，size=2K、b64_json、无水印），返回 (字节, mime)，调用方存 `images` 表 | Pillow 合成（同返回字节） |
 | `ensure_stage_images` 等 art.py | — | 恒为 Pillow（阶段资产需确定性 + 透明底，不走生图）；URL 指向 /api/v1/art/... 动态渲染端点 |
 
-- 配置（`ai_gateway/settings.py`，独立加载避免与 app.config 循环导入）：`AI_PROVIDER=ark|mock`（未配置 `ARK_API_KEY` 自动 mock）、`ARK_BASE_URL`、`ARK_CHAT_MODEL=doubao-seed-2-0-lite-260215`、`ARK_VLM_MODEL`（识花专用，缺省同 chat）、`ARK_IMAGE_MODEL=doubao-seedream-5-0-260128`、`ARK_CHAT_TIMEOUT=90`、`ARK_IMAGE_TIMEOUT=120`；chat 调用固定 `reasoning_effort=low` 控制时延。时延优化（2026-07-25 二轮）：VLM 图片 `detail=low`、科普文案 2 句且 max_tokens=200、识花首响与科普解耦（首响≈VLM 耗时，科普后台异步补齐）。时延优化（2026-07-25 三轮，花束链路）：搭配说明/包装建议 ThreadPoolExecutor 并行、预览首响与生图解耦（预览图后台生成，超时自动降级 Pillow 保底出图）。生图 size 用 2K（seedream-5-0 最小档位，1K 不被接受；实测约 25s）。
+- 配置（`ai_gateway/settings.py`，独立加载避免与 app.config 循环导入）：`AI_PROVIDER=ark|mock`（未配置 `ARK_API_KEY` 自动 mock）、`ARK_BASE_URL`、`ARK_CHAT_MODEL=doubao-seed-2-0-lite-260215`、`ARK_VLM_MODEL`（识花专用，缺省同 chat）、`ARK_VIDEO_MODEL`（视频识花属性抽取专用，缺省同 VLM）、`ARK_IMAGE_MODEL=doubao-seedream-5-0-260128`、`ARK_CHAT_TIMEOUT=90`、`ARK_IMAGE_TIMEOUT=120`；chat 调用固定 `reasoning_effort=low` 控制时延。时延优化（2026-07-25 二轮）：VLM 图片 `detail=low`、科普文案 2 句且 max_tokens=200、识花首响与科普解耦（首响≈VLM 耗时，科普后台异步补齐）。时延优化（2026-07-25 三轮，花束链路）：搭配说明/包装建议 ThreadPoolExecutor 并行、预览首响与生图解耦（预览图后台生成，超时自动降级 Pillow 保底出图）。生图 size 用 2K（seedream-5-0 最小档位，1K 不被接受；实测约 25s）。
 - 密钥经环境变量或 `server/.env`（本地，勿提交；`server/.env.example` 为模板）。
 - pytest 经 `tests/conftest.py` 强制 `AI_PROVIDER=mock`（离线、确定性）；真实链路烟测：`scripts/ark_smoke.py`。
 
