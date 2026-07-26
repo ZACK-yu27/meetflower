@@ -80,6 +80,7 @@ def _gen_items(material: list[dict], forms: dict[tuple[str, str], str] | None = 
         BouquetItem(
             species=m["species"], color=m["color"], count=m["count"],
             form=forms.get((m["species"], m["color"])),
+            gifted=bool(m.get("gifted", False)),
         )
         for m in material
     ]
@@ -173,7 +174,7 @@ def preview(
 
 
 def recommend(session: Session, garden_id: int, occasion: str) -> RecommendOut:
-    """AI 推荐搭配（1.13）：mock LLM 按意图从当前库存可用花材选 1–2 种 + 1 种赠送花材。"""
+    """AI 推荐搭配（1.13）：选品由 floristry 规则库确定性执行，LLM 只写推荐理由。"""
     if occasion not in config.OCCASIONS:
         raise DomainError(422, f"未知的送花意图：{occasion}")
     available = [

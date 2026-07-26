@@ -409,14 +409,14 @@ def test_recommend_by_occasion(session):
 
 
 def test_recommend_empty_stock_still_gives_bonus(session):
-    """库存为空：items 为空，仍给出赠送花材。"""
+    """库存为空：items 为空，仍给出赠送花材（floristry 规则：默认满天星·白）。"""
     for item in session.scalars(select(HouseItem)).all():
         item.quantity = 0
     session.commit()
     out = bouquet_service.recommend(session, config.GARDEN_ID, "毕业季")
     assert out.items == []
     assert out.bonus_flower.gifted is True
-    assert (out.bonus_flower.species, out.bonus_flower.color) == ("向日葵", "黄")
+    assert (out.bonus_flower.species, out.bonus_flower.color) == ("满天星", "白")
 
 
 # ---------- 1.8–1.10 订单：赠送不扣库存 / 备注·替代落库 / 重复 409 / 惰性推进 ----------

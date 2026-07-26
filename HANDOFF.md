@@ -114,3 +114,16 @@ cd web && npm run build
   → LLM 匹配花卉（输出与拍照识别同格式 + reason）；结果复用拍照全链路（同表/同种植/同线稿/同科普）。
 - 端点 `POST /api/v1/recognitions/video`（≤30MB）；`RecognitionOut.resemble` 拍照识别恒为 null。
 - 新依赖 imageio-ffmpeg（requirements.txt，自带静态 ffmpeg，Render 免装）。
+
+## 10. 花艺规则库（floristry-rules skill，2026-07-26）
+
+- 花束搭配 + 预览图生成规则已内化：规则文档 `docs/floristry_rules.md`，
+  **代码唯一事实来源 `server/app/ai_gateway/floristry.py`（确定性执行）**；
+  **任何花束推荐/构图/包装/预览提示词/搭配文案改动必须先调用 `floristry-rules` skill**，改规则三处同步。
+- 设计原则：选品/配比/色彩协调/编排配方/包装色由 Python 执行（每次都一致）；
+  LLM 只写文案（reason 20–30 字 / note 20–30 字 / packaging 10–20 字），
+  长度校验（10–45 / 10–40 / 8–30）不合格一律回落 floristry 模板。
+- 要点：赠送花材默认满天星·白、不占库存、gifted 标记必须经 `_gen_items()` 传入 BouquetItem；
+  编排配方 1 种=半球形 / 主+辅=圆三角 / 含赠送=扇形三角；包装色 PACKAGING_COLORS 查主色；
+  Pillow 降级合成时主花居视觉中心。
+- 验收：pytest 全绿（tests/test_floristry.py 常驻断言选品/配比/赠送/模板长度/提示词要素）。

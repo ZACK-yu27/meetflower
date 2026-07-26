@@ -13,7 +13,7 @@ from dataclasses import dataclass
 
 from PIL import Image, ImageDraw, ImageFilter
 
-from . import ark, settings
+from . import ark, floristry, settings
 from .art import render_flower_head
 
 logger = logging.getLogger("ai_gateway.imagegen")
@@ -35,6 +35,7 @@ class BouquetItem:
     color: str
     count: int
     form: str | None = None  # 花型（Pillow 合成时决定轮廓；None 回落图鉴/rosette）
+    gifted: bool = False     # 赠送花材（不占库存；构图算点缀，提示词标注"（赠送）"）
 
 
 def _vgradient(size: int, top: str, bottom: str) -> Image.Image:
@@ -87,12 +88,8 @@ def generate_bouquet(items: list[BouquetItem], out_stem: str) -> tuple[bytes, st
 # ---------- 真实生图（火山方舟 doubao-seedream-5-0） ----------
 
 def _build_prompt(items: list[BouquetItem]) -> str:
-    flowers = "、".join(f"{it.count} 朵{it.color}色{it.species}" for it in items)
-    return (
-        f"一束写实风格的鲜花花束特写商业摄影：花材为{flowers}，"
-        "花朵新鲜饱满、高低错落，牛皮纸扇形包装，系深色缎带蝴蝶结，"
-        "暖米色纯色背景，柔和自然光，浅景深，正方形构图，高清花艺摄影质感"
-    )
+    """生图提示词由 floristry 规则库按编排配方组装（结构/落位/包装色确定性，每次都一致）。"""
+    return floristry.build_image_prompt(items)
 
 
 def _generate_ark(items: list[BouquetItem], out_stem: str) -> tuple[bytes, str]:
@@ -109,12 +106,19 @@ def _generate_mock(items: list[BouquetItem], out_stem: str) -> tuple[bytes, str]
     rnd = random.Random(out_stem)
     img = _vgradient(SIZE, _BG_TOP, _BG_BOTTOM).convert("RGBA")
 
-    # 展开花材清单
+    # 展开花材清单：主花（非赠送、朵数最多者）优先占据视觉中心位置（floristry 规则：主花最醒目）
     heads: list[tuple[str, str, str | None]] = []
     for it in items:
         heads.extend([(it.species, it.color, it.form)] * it.count)
-    rnd.shuffle(heads)
+    main = floristry.main_item(items)
+    main_key = (main.species, main.color) if main else None
+
+    def _head_rank(h: tuple[str, str, str | None]) -> tuple[int, float]:
+        return (0 if (h[0], h[1]) == main_key else 1, rnd.uniform(0, 1))
+
+    heads.sort(key=_head_rank)
     positions, head_r = _head_positions(len(heads), rnd)
+    positions.sort(key=lambda p: (abs(p[0] - 300), p[1]))  # 中心偏前的位置先分配给主花
     gather = (300, 430)  # 花茎收束点（包装纸腰部）
 
     d = ImageDraw.Draw(img)

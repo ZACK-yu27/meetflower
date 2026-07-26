@@ -167,7 +167,7 @@
 
 ### 1.13 AI 推荐搭配 `POST /api/v1/bouquets/recommend`（新增）
 - 请求：`{ "occasion": "情侣约会" }`（occasion 枚举：`情侣约会 / 毕业季 / 生日祝福 / 探望问候 / 日常惊喜`，不在枚举内 422）
-- 处理：mock LLM（ai_gateway/llm.py `recommend_bouquet`）：按意图从**当前库存可用花材**中选 1–2 种组合（库存为空时仍给出赠送花材 + 空 items），并给出 1 种**赠送花材**（品种不限，不要求用户种植）；生成理由文案。
+- 处理：选品/配比/赠送花材由 **floristry 规则库**（ai_gateway/floristry.py，规则文档 docs/floristry_rules.md）**确定性执行**：按意图评分从**当前库存可用花材**选 1 种主花（+色彩协调的辅花 1 种，主/辅约 7:3，库存为空时 items 为空），赠送花材默认优先满天星·白、不与 items 重复、不占库存；LLM（llm.py `recommend_bouquet`）仅撰写 20–30 字推荐理由，长度校验不合格回落规则模板。
 - 响应 200：
 ```json
 {
@@ -221,20 +221,29 @@
   1. ta 未完成本阶段 且 ta 储备 ≥ needs：`ta_ready_since` 为空则置为当前时间；非空且距今 ≥ `TA_CARE_DELAY_SECONDS`（默认 8s）→ 扣 ta 整组资源、记 (ta) care、再做升级检查。
   2. ta 储备 < needs：`ta_ready_since` 重置为空。
 
-## 4. ai_gateway 包契约（vlm/art/imagegen 不变；llm.py 新增两个 mock）
+## 4. ai_gateway 包契约（vlm/art 不变；imagegen/llm 经 floristry 规则库）
 
 ```python
-# llm.py 新增：
+# floristry.py（花艺规则库，docs/floristry_rules.md 的确定性实现）：
+def select_items(occasion: str, available: list[dict]) -> tuple[list[dict], dict]:
+    """过滤 quantity>0 库存 → 意图评分选 1 主花（+协调辅花，主/辅约 7:3）→ 赠送花材默认满天星·白；
+    返回 (items, bonus_flower)，bonus_flower 含 gifted: True。"""
+
+def build_image_prompt(items: list) -> str:
+    """按编排配方表（1 种半球形 / 主+辅圆三角 / 含点缀扇形三角）组装 Seedream 提示词，
+    包装色由 PACKAGING_COLORS 查主色确定。"""
+
+# llm.py（LLM 只写文案，长度校验不合格回落 floristry 模板）：
 def recommend_bouquet(occasion: str, available: list[dict]) -> dict:
-    """available = [{species, color, quantity}]（quantity>0 的库存）；
+    """available = [{species, color, quantity}]（quantity>0 的库存）；选品委托 floristry.select_items；
     返回 {items: [{species, color, count}], bonus_flower: {species, color, count, gifted: True}, reason: str}"""
 
 def packaging_suggestion(items: list[dict], occasion: str | None) -> str:
-    """按主色/意图给包装建议一句话，如 '建议奶白色雾面纸包裹，配浅粉丝带。'"""
+    """10–20 字包装建议（纸材/颜色/丝带/衬托关系），ark 模式附 floristry 参考配色，回落 floristry.packaging_template。"""
 ```
 
-- 意图→赠送花材映射建议（可在实现中微调，品种不限，建议取自图鉴 6 品种）：情侣约会→玫瑰·红；毕业季→向日葵·黄；生日祝福→郁金香·粉(无粉则红)；探望问候→百合·白；日常惊喜→洋甘菊·白；赠送与 items 不重复时优先（重复则换满天星·白）。
-- `arrangement_note`（预览时生成）：基于 items+bonus 与 occasion 的一句话搭配说明（模板化）。
+- 选品/配比/色彩协调/编排配方/包装色一律走 floristry 规则库（每次都一致）；意图偏好表 `floristry.OCCASION_PREFS`：情侣约会→玫瑰/郁金香·暖红；毕业季→向日葵/洋甘菊·暖黄；生日祝福→郁金香/玫瑰/绣球·暖红暖黄；探望问候→百合/洋甘菊·中性暖红；日常惊喜→洋甘菊/绣球/满天星·中性冷色暖红。
+- `arrangement_note`（预览时生成）：基于 items+bonus 与 occasion 的 20–30 字搭配说明（主花/辅花/赠送花材/场景），回落 floristry.note_template。
 - 其余契约（identify_flower / flower_profile / ensure_stage_images / generate_bouquet）不变；catalog `GROWTH_RHYTHM` 更新为 §0 表格值并删除 `buffer_seconds` 字段（StageSpec 同步去字段，config.py 从 catalog import）。
 
 ### 4.1 真实模型接入（2026-07-25，火山方舟）
@@ -245,9 +254,9 @@ ai_gateway 对外契约全部不变，内部按 `AI_PROVIDER` 双实现分发（
 |---|---|---|
 | `identify_flower` | chat/completions 多模态（base64 图 + `response_format=json_object` + `detail=low`），自由识别——品种/颜色不限于图鉴，仅校验非空；模型取 `ARK_VLM_MODEL`（缺省同 chat） | 字节哈希命中图鉴 |
 | `flower_profile` | chat/completions 纯文本科普（2 句）；生长节律恒取 catalog；识花链路 ark 模式下经 BackgroundTasks 异步回写 | 图鉴模板（图鉴外品种用通用模板） |
-| `recommend_bouquet` | chat/completions JSON 模式，items 校验必须 ⊆ 库存且不超量，bonus 品种非空即可 | 意图映射规则 |
-| `arrangement_note` / `packaging_suggestion` | chat/completions 一句话 | 模板 |
-| `generate_bouquet` | images/generations（Seedream，size=2K、b64_json、无水印），返回 (字节, mime)，调用方存 `images` 表 | Pillow 合成（同返回字节） |
+| `recommend_bouquet` | 选品由 floristry 规则库确定性执行；chat/completions 仅写 20–30 字理由（校验 10–45 字） | 选品相同 + floristry.reason_template 理由 |
+| `arrangement_note` / `packaging_suggestion` | chat/completions 一句话（20–30 / 10–20 字，带 floristry 参考配色） | floristry.note_template / packaging_template |
+| `generate_bouquet` | images/generations（Seedream，size=2K、b64_json、无水印），提示词由 floristry.build_image_prompt 按编排配方组装，返回 (字节, mime)，调用方存 `images` 表 | Pillow 合成（主花居视觉中心，同返回字节） |
 | `ensure_stage_images` 等 art.py | — | 恒为 Pillow（阶段资产需确定性 + 透明底，不走生图）；URL 指向 /api/v1/art/... 动态渲染端点 |
 
 - 配置（`ai_gateway/settings.py`，独立加载避免与 app.config 循环导入）：`AI_PROVIDER=ark|mock`（未配置 `ARK_API_KEY` 自动 mock）、`ARK_BASE_URL`、`ARK_CHAT_MODEL=doubao-seed-2-0-lite-260215`、`ARK_VLM_MODEL`（识花专用，缺省同 chat）、`ARK_VIDEO_MODEL`（视频识花属性抽取专用，缺省同 VLM）、`ARK_IMAGE_MODEL=doubao-seedream-5-0-260128`、`ARK_CHAT_TIMEOUT=90`、`ARK_IMAGE_TIMEOUT=120`；chat 调用固定 `reasoning_effort=low` 控制时延。时延优化（2026-07-25 二轮）：VLM 图片 `detail=low`、科普文案 2 句且 max_tokens=200、识花首响与科普解耦（首响≈VLM 耗时，科普后台异步补齐）。时延优化（2026-07-25 三轮，花束链路）：搭配说明/包装建议 ThreadPoolExecutor 并行、预览首响与生图解耦（预览图后台生成，超时自动降级 Pillow 保底出图）。生图 size 用 2K（seedream-5-0 最小档位，1K 不被接受；实测约 25s）。
